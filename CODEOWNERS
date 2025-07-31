@@ -1,0 +1,27 @@
+# Global owners
+* @maintainer-team
+
+# Core algorithms
+/pg_neo_graph_rl/algorithms/ @algorithm-team
+/pg_neo_graph_rl/core/ @core-team
+
+# Environments and simulations
+/pg_neo_graph_rl/environments/ @environment-team
+
+# Documentation
+/docs/ @docs-team
+*.md @docs-team
+
+# CI/CD and infrastructure
+/.github/ @devops-team
+/docker/ @devops-team
+Dockerfile @devops-team
+docker-compose*.yml @devops-team
+
+# Security and configuration
+/security/ @security-team
+.pre-commit-config.yaml @security-team
+pyproject.toml @maintainer-team
+
+# Tests require broader review
+/tests/ @maintainer-team @algorithm-team

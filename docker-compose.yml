@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # Development environment
+  dev:
+    build:
+      context: .
+      target: development
+    volumes:
+      - .:/app
+      - pip-cache:/home/app/.cache/pip
+    environment:
+      - PYTHONPATH=/app
+    ports:
+      - "8888:8888"  # Jupyter
+      - "6006:6006"  # TensorBoard
+    command: bash
+    stdin_open: true
+    tty: true
+
+  # Testing environment
+  test:
+    build:
+      context: .
+      target: development
+    volumes:
+      - .:/app
+      - pip-cache:/home/app/.cache/pip
+    environment:
+      - PYTHONPATH=/app
+    command: pytest --cov=pg_neo_graph_rl --cov-report=html
+    
+  # Production environment
+  prod:
+    build:
+      context: .
+      target: production
+    environment:
+      - PYTHONPATH=/app
+    restart: unless-stopped
+
+  # GPU-enabled environment
+  gpu:
+    build:
+      context: .
+      target: gpu
+    volumes:
+      - .:/app
+    environment:
+      - PYTHONPATH=/app
+      - NVIDIA_VISIBLE_DEVICES=all
+    runtime: nvidia
+    command: python -c "import jax; print(f'JAX devices: {jax.devices()}')"
+
+  # Jupyter notebook server
+  jupyter:
+    build:
+      context: .
+      target: development
+    volumes:
+      - .:/app
+      - jupyter-data:/home/app/.jupyter
+    ports:
+      - "8888:8888"
+    environment:
+      - PYTHONPATH=/app
+    command: >
+      bash -c "pip install jupyter jupyterlab &&
+               jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root
+               --NotebookApp.token='' --NotebookApp.password=''"
+
+volumes:
+  pip-cache:
+  jupyter-data:
