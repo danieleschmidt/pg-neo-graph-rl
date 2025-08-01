@@ -1,0 +1,80 @@
+{
+  "last_updated": "2025-08-01T12:09:38.646045",
+  "total_executions": 5,
+  "execution_history": [
+    {
+      "timestamp": "2025-08-01T12:09:30.712300",
+      "item_id": "dep-update-blinker",
+      "title": "Update blinker from 1.7.0 to 1.9.0",
+      "category": "dependency_update",
+      "predicted_score": 22.2,
+      "predicted_effort_hours": 1.0,
+      "predicted_value": 22.2,
+      "success": true,
+      "execution_time_minutes": 1.422564188639323e-06,
+      "actual_effort_hours": 2.3709403143988716e-08,
+      "completed_at": "2025-08-01T12:09:30.712406"
+    },
+    {
+      "timestamp": "2025-08-01T12:09:32.741263",
+      "item_id": "dep-update-blinker",
+      "title": "Update blinker from 1.7.0 to 1.9.0",
+      "category": "dependency_update",
+      "predicted_score": 22.2,
+      "predicted_effort_hours": 1.0,
+      "predicted_value": 22.2,
+      "success": true,
+      "execution_time_minutes": 8.702278137207031e-07,
+      "actual_effort_hours": 1.4503796895345051e-08,
+      "completed_at": "2025-08-01T12:09:32.741336"
+    },
+    {
+      "timestamp": "2025-08-01T12:09:34.742744",
+      "item_id": "dep-update-blinker",
+      "title": "Update blinker from 1.7.0 to 1.9.0",
+      "category": "dependency_update",
+      "predicted_score": 22.2,
+      "predicted_effort_hours": 1.0,
+      "predicted_value": 22.2,
+      "success": true,
+      "execution_time_minutes": 8.50359598795573e-07,
+      "actual_effort_hours": 1.4172659979926216e-08,
+      "completed_at": "2025-08-01T12:09:34.742814"
+    },
+    {
+      "timestamp": "2025-08-01T12:09:36.711484",
+      "item_id": "dep-update-blinker",
+      "title": "Update blinker from 1.7.0 to 1.9.0",
+      "category": "dependency_update",
+      "predicted_score": 22.2,
+      "predicted_effort_hours": 1.0,
+      "predicted_value": 22.2,
+      "success": true,
+      "execution_time_minutes": 8.58306884765625e-07,
+      "actual_effort_hours": 1.4305114746093751e-08,
+      "completed_at": "2025-08-01T12:09:36.711553"
+    },
+    {
+      "timestamp": "2025-08-01T12:09:38.645925",
+      "item_id": "dep-update-blinker",
+      "title": "Update blinker from 1.7.0 to 1.9.0",
+      "category": "dependency_update",
+      "predicted_score": 22.2,
+      "predicted_effort_hours": 1.0,
+      "predicted_value": 22.2,
+      "success": true,
+      "execution_time_minutes": 8.662541707356771e-07,
+      "actual_effort_hours": 1.4437569512261285e-08,
+      "completed_at": "2025-08-01T12:09:38.645995"
+    }
+  ],
+  "summary_stats": {
+    "success_rate": 1.0,
+    "average_execution_time_minutes": 9.735425313313803e-07,
+    "total_value_delivered": 111.0,
+    "most_common_categories": {
+      "dependency_update": 5
+    },
+    "last_30_days_executions": 5
+  }
+}
