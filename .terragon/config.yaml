@@ -1,0 +1,120 @@
+# Terragon Autonomous SDLC Value Discovery Configuration
+# Repository: pg-neo-graph-rl
+# Maturity Level: MATURING (50-75%)
+# Last Updated: 2025-01-01
+
+repository:
+  name: "pg-neo-graph-rl"
+  maturity_level: "maturing"
+  maturity_score: 65
+  primary_language: "python"
+  framework: "jax_flax"
+  domain: "federated_graph_rl"
+
+scoring:
+  weights:
+    # Optimized for maturing repositories
+    wsjf: 0.6        # Higher weight on business value delivery
+    ice: 0.1         # Lower weight on simple impact scoring  
+    technicalDebt: 0.2  # Important for refactoring
+    security: 0.1    # Standard security priority
+  
+  multipliers:
+    security_critical: 2.0
+    compliance_urgent: 1.8
+    dependency_update: 0.8
+    documentation_only: 0.6
+    hotspot_code: 3.0  # High-churn, high-complexity files
+    
+  thresholds:
+    min_execution_score: 15.0
+    max_risk_tolerance: 0.8
+    min_confidence: 0.6
+
+discovery:
+  sources:
+    enabled:
+      - git_history: true
+      - static_analysis: true  
+      - dependency_scan: true
+      - test_coverage: true
+      - performance_metrics: false  # No production metrics yet
+      - issue_tracker: false        # No GitHub issues integration yet
+      - code_comments: true
+    
+    scan_intervals:
+      hourly: ["dependency_scan", "security_scan"]
+      daily: ["static_analysis", "test_coverage", "git_history"]
+      weekly: ["architecture_review", "performance_analysis"]
+      monthly: ["strategic_alignment", "technology_modernization"]
+  
+  tools:
+    static_analysis:
+      - ruff         # Already configured in pyproject.toml
+      - mypy         # Already configured  
+      - black        # Already configured
+      - vulture      # Dead code detection
+      - radon        # Complexity metrics
+    
+    security:
+      - bandit       # Python security linting
+      - safety       # Dependency vulnerability scanning
+      - semgrep      # Static security analysis
+    
+    dependency:
+      - pip_audit    # Python dependency auditing
+      - dependabot   # Automated dependency updates
+    
+    testing:
+      - pytest       # Already configured
+      - coverage     # Already configured  
+      - mutation_testing: true
+
+execution:
+  autonomous_mode: true
+  max_concurrent_tasks: 1
+  rollback_on_failure: true
+  
+  validation_requirements:
+    run_tests: true
+    min_test_coverage: 80
+    lint_passes: true
+    type_check_passes: true
+    security_scan_passes: true
+    
+  branch_strategy:
+    prefix: "auto-value/"
+    base_branch: "main" 
+    auto_merge_threshold: 95  # Auto-merge score threshold
+    
+  pr_configuration:
+    auto_assign_codeowners: true
+    require_review: true
+    auto_label: true
+    include_metrics: true
+
+learning:
+  track_prediction_accuracy: true
+  adapt_scoring_weights: true
+  store_execution_history: true
+  feedback_loop_enabled: true
+  
+  success_metrics:
+    - "tests_pass_rate"
+    - "deployment_success_rate" 
+    - "code_quality_improvement"
+    - "technical_debt_reduction"
+    - "security_posture_improvement"
+
+monitoring:
+  prometheus_gateway: "localhost:9091"
+  grafana_dashboard: true
+  alert_thresholds:
+    failed_executions: 3
+    low_value_items: 5
+    security_violations: 1
+    
+notifications:
+  slack_webhook: null  # Configure if needed
+  email_alerts: false
+  pr_comments: true
