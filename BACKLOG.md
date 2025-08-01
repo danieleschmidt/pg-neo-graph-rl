@@ -2,8 +2,8 @@
 
 **Repository**: pg-neo-graph-rl
 **Maturity Level**: MATURING (65%)
-**Last Updated**: 2025-08-01 12:07:51
-**Total Value Items**: 16
+**Last Updated**: 2025-08-01 12:09:40
+**Total Value Items**: 20
 
 ## 🎯 Next Best Value Item
 
@@ -37,20 +37,20 @@
 
 ## 📈 Value Metrics
 
-- **Average Item Score**: 19.3
+- **Average Item Score**: 19.2
 - **High-Value Items (>50 score)**: 0
-- **Total Estimated Effort**: 26.0 hours
-- **Potential Debt Reduction**: 40.0 hours
+- **Total Estimated Effort**: 32.0 hours
+- **Potential Debt Reduction**: 48.0 hours
 
 ## 🔄 Discovery Sources Distribution
 
-- **Code Comments**: 10 items (62.5%)
-- **Dependency Scan**: 5 items (31.2%)
-- **Test Coverage**: 1 items (6.2%)
+- **Code Comments**: 14 items (70.0%)
+- **Dependency Scan**: 5 items (25.0%)
+- **Test Coverage**: 1 items (5.0%)
 
 
 ## 📊 Category Breakdown
 
-- **Dependency Update**: 5 items (31.2%) - 5.0 hours
-- **Technical Debt**: 10 items (62.5%) - 15.0 hours
-- **Testing**: 1 items (6.2%) - 6.0 hours
+- **Dependency Update**: 5 items (25.0%) - 5.0 hours
+- **Technical Debt**: 14 items (70.0%) - 21.0 hours
+- **Testing**: 1 items (5.0%) - 6.0 hours
