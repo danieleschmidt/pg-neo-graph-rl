@@ -32,11 +32,16 @@ logs/
 tensorboard_logs/
 
 # IDEs
-.vscode/
+.vscode/settings.json
+.vscode/launch.json
 .idea/
 *.swp
 *.swo
 *~
+
+# Allow team VS Code configuration
+!.vscode/extensions.json
+!.vscode/tasks.json
 
 # Environment
 .env
