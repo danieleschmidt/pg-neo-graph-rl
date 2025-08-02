@@ -1,0 +1,22 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.black-formatter", 
+    "charliermarsh.ruff",
+    "ms-python.mypy-type-checker",
+    "ms-toolsai.jupyter",
+    "redhat.vscode-yaml",
+    "ms-vscode.makefile-tools",
+    "GitHub.copilot",
+    "GitHub.copilot-chat",
+    "ms-vscode.vscode-json",
+    "ms-vscode-remote.remote-containers",
+    "eamodio.gitlens",
+    "ms-python.debugpy",
+    "ms-vscode.test-adapter-converter",
+    "hbenl.vscode-test-explorer"
+  ],
+  "unwantedRecommendations": [
+    "ms-python.pylint"
+  ]
+}

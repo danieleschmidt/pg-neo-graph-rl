@@ -64,10 +64,15 @@ benchmarks = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/pg-neo-graph-rl"
+Homepage = "https://github.com/danieleschmidt/pg-neo-graph-rl"
 Documentation = "https://pg-neo-graph-rl.readthedocs.io"
-Repository = "https://github.com/yourusername/pg-neo-graph-rl"
-Issues = "https://github.com/yourusername/pg-neo-graph-rl/issues"
+Repository = "https://github.com/danieleschmidt/pg-neo-graph-rl"
+Issues = "https://github.com/danieleschmidt/pg-neo-graph-rl/issues"
+
+[project.scripts]
+pg-neo-train = "pg_neo_graph_rl.cli:train"
+pg-neo-benchmark = "pg_neo_graph_rl.cli:benchmark"
+pg-neo-monitor = "pg_neo_graph_rl.cli:monitor"
 
 [tool.hatch.version]
 source = "vcs"
