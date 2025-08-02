@@ -1,0 +1,195 @@
+{
+  "name": "PG-Neo-Graph-RL Development Environment",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11-bullseye",
+  
+  // Features to add to the dev container
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "18"
+    },
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "configureZshAsDefaultShell": true,
+      "installOhMyZsh": true
+    }
+  },
+  
+  // Configure tool-specific properties
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.linting.enabled": true,
+        "python.linting.pylintEnabled": false,
+        "python.linting.flake8Enabled": true,
+        "python.linting.mypyEnabled": true,
+        "python.formatting.provider": "black",
+        "python.formatting.blackArgs": ["--line-length=88"],
+        "python.sortImports.args": ["--profile", "black"],
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.organizeImports": true
+        },
+        "editor.rulers": [88],
+        "files.trimTrailingWhitespace": true,
+        "files.insertFinalNewline": true,
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "git.autofetch": true,
+        "git.enableSmartCommit": true,
+        "jupyter.askForKernelRestart": false,
+        "jupyter.interactiveWindow.textEditor.executeSelection": true
+      },
+      "extensions": [
+        "ms-python.python",
+        "ms-python.flake8",
+        "ms-python.mypy-type-checker",
+        "ms-python.black-formatter",
+        "ms-python.isort",
+        "ms-toolsai.jupyter",
+        "ms-toolsai.vscode-jupyter-cell-tags",
+        "ms-toolsai.vscode-jupyter-slideshow",
+        "GitHub.copilot",
+        "GitHub.copilot-chat",
+        "GitHub.vscode-pull-request-github",
+        "eamodio.gitlens",
+        "ms-vscode.vscode-json",
+        "redhat.vscode-yaml",
+        "ms-vscode.makefile-tools",
+        "ms-azuretools.vscode-docker",
+        "tamasfe.even-better-toml",
+        "yzhang.markdown-all-in-one",
+        "DavidAnson.vscode-markdownlint",
+        "streetsidesoftware.code-spell-checker",
+        "ms-vscode.test-adapter-converter",
+        "hbenl.vscode-test-explorer",
+        "littlefoxteam.vscode-python-test-adapter",
+        "ms-vscode-remote.remote-containers",
+        "ms-vscode.remote-explorer"
+      ]
+    }
+  },
+  
+  // Use 'forwardPorts' to make a list of ports inside the container available locally
+  "forwardPorts": [
+    8080,  // Monitoring dashboard
+    8888,  // Jupyter notebook
+    3000,  // Grafana
+    9090,  // Prometheus
+    6379,  // Redis
+    5432   // PostgreSQL
+  ],
+  
+  // Port attributes
+  "portsAttributes": {
+    "8080": {
+      "label": "Monitoring Dashboard",
+      "onAutoForward": "openBrowser"
+    },
+    "8888": {
+      "label": "Jupyter Notebook",
+      "onAutoForward": "openBrowser"
+    },
+    "3000": {
+      "label": "Grafana",
+      "onAutoForward": "openBrowser"
+    },
+    "9090": {
+      "label": "Prometheus",
+      "onAutoForward": "openBrowser"
+    }
+  },
+  
+  // Environment variables
+  "containerEnv": {
+    "ENVIRONMENT": "development",
+    "PYTHONPATH": "/workspaces/pg-neo-graph-rl",
+    "JAX_PLATFORM_NAME": "cpu",
+    "JAX_ENABLE_X64": "true",
+    "TZ": "UTC"
+  },
+  
+  // Mount the docker socket for docker-in-docker
+  "mounts": [
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+  ],
+  
+  // Commands to run when creating the container
+  "onCreateCommand": {
+    "install-system-deps": "sudo apt-get update && sudo apt-get install -y graphviz graphviz-dev pkg-config",
+    "setup-git": "git config --global --add safe.directory /workspaces/pg-neo-graph-rl"
+  },
+  
+  // Commands to run after the container is created
+  "postCreateCommand": {
+    "install-python-deps": "pip install --upgrade pip && pip install -e '.[dev]' && pip install -r requirements-automation.txt",
+    "setup-pre-commit": "pre-commit install",
+    "create-env-file": "cp .env.example .env",
+    "setup-jupyter": "jupyter notebook --generate-config && echo \"c.NotebookApp.token = ''\" >> ~/.jupyter/jupyter_notebook_config.py"
+  },
+  
+  // Commands to run when starting the container
+  "postStartCommand": {
+    "start-services": "echo 'Development environment ready! Run: python scripts/integration_manager.py start'"
+  },
+  
+  // Set the default user
+  "remoteUser": "vscode",
+  
+  // Configure container user
+  "updateRemoteUserUID": true,
+  
+  // Additional container arguments
+  "runArgs": [
+    "--gpus=all",  // Enable GPU access if available
+    "--shm-size=2g"  // Increase shared memory for PyTorch/JAX
+  ],
+  
+  // Development container lifecycle scripts
+  "initializeCommand": {
+    "check-docker": "docker --version",
+    "check-gpu": "nvidia-smi || echo 'No GPU detected, using CPU mode'"
+  },
+  
+  // Workspace configuration
+  "workspaceFolder": "/workspaces/pg-neo-graph-rl",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/pg-neo-graph-rl,type=bind,consistency=cached",
+  
+  // Security settings
+  "privileged": true,  // Required for docker-in-docker
+  "init": true,
+  
+  // Resource limits
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "8gb",
+    "storage": "32gb"
+  },
+  
+  // Development shortcuts
+  "overrideCommand": false,
+  "shutdownAction": "stopContainer",
+  
+  // Additional configuration for specific services
+  "otherPortsAttributes": {
+    "onAutoForward": "silent"
+  },
+  
+  // Secrets to pass to the container
+  "secrets": {
+    "GITHUB_TOKEN": {
+      "description": "GitHub personal access token for API access"
+    },
+    "OPENAI_API_KEY": {
+      "description": "OpenAI API key for AI-powered features"
+    }
+  },
+  
+  // Development-specific overrides
+  "remoteEnv": {
+    "LOCAL_WORKSPACE_FOLDER": "${localWorkspaceFolder}",
+    "CONTAINER_WORKSPACE_FOLDER": "${containerWorkspaceFolder}"
+  }
+}
