@@ -1,0 +1,174 @@
+groups:
+  - name: pg-neo-graph-rl.rules
+    rules:
+      # Training performance alerts
+      - alert: TrainingLossStagnant
+        expr: rate(pg_neo_training_loss[30m]) == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Training loss has not changed for 30 minutes"
+          description: "The training loss for PG-Neo-Graph-RL has remained constant for the last 30 minutes, indicating potential training issues."
+
+      - alert: TrainingLossIncreasing
+        expr: increase(pg_neo_training_loss[15m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Training loss is increasing significantly"
+          description: "The training loss has increased by more than 0.1 in the last 15 minutes, indicating potential model degradation."
+
+      # Federated learning alerts
+      - alert: FederatedAgentsDown
+        expr: pg_neo_active_agents < 2
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Insufficient federated learning agents"
+          description: "Only {{ $value }} federated learning agents are active. Minimum of 2 required for training."
+
+      - alert: CommunicationLatencyHigh
+        expr: pg_neo_communication_latency_seconds > 5
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High communication latency between agents"
+          description: "Communication latency between federated agents is {{ $value }}s, which may impact training performance."
+
+      # System resource alerts
+      - alert: HighMemoryUsage
+        expr: container_memory_usage_bytes{name="pg-neo-graph-rl"} / container_spec_memory_limit_bytes{name="pg-neo-graph-rl"} > 0.9
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is above 90% for PG-Neo-Graph-RL container"
+
+      - alert: HighCPUUsage
+        expr: rate(container_cpu_usage_seconds_total{name="pg-neo-graph-rl"}[5m]) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is above 80% for PG-Neo-Graph-RL container for more than 5 minutes"
+
+      # JAX/GPU specific alerts
+      - alert: GPUMemoryHigh
+        expr: pg_neo_gpu_memory_usage_ratio > 0.95
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "GPU memory usage critical"
+          description: "GPU memory usage is above 95%, which may cause out-of-memory errors"
+
+      - alert: JAXCompilationSlow
+        expr: pg_neo_jax_compilation_time_seconds > 60
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "JAX compilation taking too long"
+          description: "JAX compilation time is {{ $value }}s, which is unusually slow"
+
+      # Graph processing alerts
+      - alert: GraphSizeUnusual
+        expr: pg_neo_graph_size > 10000 or pg_neo_graph_size < 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Unusual graph size detected"
+          description: "Graph size is {{ $value }}, which is outside normal range (10-10000 nodes)"
+
+      - alert: GraphProcessingError
+        expr: increase(pg_neo_graph_processing_errors_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Graph processing errors detected"
+          description: "{{ $value }} graph processing errors occurred in the last 5 minutes"
+
+      # Application health alerts
+      - alert: ApplicationDown
+        expr: up{job="pg-neo-graph-rl"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PG-Neo-Graph-RL application is down"
+          description: "The main application instance has been down for more than 1 minute"
+
+      - alert: HealthCheckFailing
+        expr: pg_neo_health_check_success == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Application health check failing"
+          description: "Health check has been failing for more than 3 minutes"
+
+  - name: infrastructure.rules
+    rules:
+      # Container health
+      - alert: ContainerKilled
+        expr: time() - container_last_seen > 60
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container killed"
+          description: "Container {{ $labels.name }} has disappeared"
+
+      - alert: ContainerCpuUsage
+        expr: (sum(rate(container_cpu_usage_seconds_total{name!=""}[3m])) BY (instance, name) * 100) > 80
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container CPU usage"
+          description: "Container CPU usage is above 80%"
+
+      - alert: ContainerMemoryUsage
+        expr: (sum(container_memory_working_set_bytes{name!=""}) BY (instance, name) / sum(container_spec_memory_limit_bytes > 0) BY (instance, name) * 100) > 80
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container Memory usage"
+          description: "Container Memory usage is above 80%"
+
+      # Node health
+      - alert: NodeDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Node down"
+          description: "Node {{ $labels.instance }} has been down for more than 2 minutes"
+
+      - alert: NodeMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.8
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node memory usage"
+          description: "Node memory usage is above 80%"
+
+      - alert: NodeDiskUsage
+        expr: (node_filesystem_size_bytes{fstype!="tmpfs"} - node_filesystem_free_bytes{fstype!="tmpfs"}) / node_filesystem_size_bytes{fstype!="tmpfs"} > 0.8
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node disk usage"
+          description: "Node disk usage is above 80%"
