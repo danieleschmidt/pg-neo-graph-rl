@@ -1,0 +1,403 @@
+# Security Scanning Workflow for PG-Neo-Graph-RL
+# Place this file in .github/workflows/security-scan.yml
+
+name: Security Scan
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Run weekly security scans on Sundays at 3 AM UTC
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+
+env:
+  PYTHONUNBUFFERED: 1
+  PYTHONDONTWRITEBYTECODE: 1
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Static Application Security Testing (SAST)
+  sast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+
+      - name: Install security scanning tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit[toml] semgrep
+
+      - name: Run Bandit security linter
+        run: |
+          bandit -r pg_neo_graph_rl/ -f sarif -o bandit-results.sarif
+          bandit -r pg_neo_graph_rl/ -f json -o bandit-results.json
+          bandit -r pg_neo_graph_rl/ --severity-level medium
+        continue-on-error: true
+
+      - name: Run Semgrep security scanner
+        run: |
+          semgrep --config=auto --sarif --output=semgrep-results.sarif pg_neo_graph_rl/
+          semgrep --config=auto --json --output=semgrep-results.json pg_neo_graph_rl/
+        continue-on-error: true
+
+      - name: Upload SARIF results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+        with:
+          sarif_file: bandit-results.sarif
+          category: bandit
+        continue-on-error: true
+
+      - name: Upload Semgrep SARIF results
+        uses: github/codeql-action/upload-sarif@v2
+        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+        with:
+          sarif_file: semgrep-results.sarif
+          category: semgrep
+        continue-on-error: true
+
+      - name: Upload security scan artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: sast-results
+          path: |
+            bandit-results.*
+            semgrep-results.*
+          retention-days: 30
+
+  # Dependency scanning
+  dependency-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+
+      - name: Install dependency scanning tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install safety pip-audit cyclonedx-bom
+
+      - name: Install project dependencies
+        run: |
+          pip install -e ".[dev]"
+
+      - name: Run Safety dependency scanner
+        run: |
+          safety check --json --output safety-results.json
+          safety check --full-report
+        continue-on-error: true
+
+      - name: Run pip-audit
+        run: |
+          pip-audit --format=json --output=pip-audit-results.json
+          pip-audit --desc --format=cyclonedx --output=sbom.json
+          pip-audit --desc
+        continue-on-error: true
+
+      - name: Generate Software Bill of Materials (SBOM)
+        run: |
+          cyclonedx-py -o sbom-cyclonedx.json --format json
+          cyclonedx-py -o sbom-cyclonedx.xml --format xml
+
+      - name: Upload dependency scan results
+        uses: actions/upload-artifact@v3
+        with:
+          name: dependency-scan-results
+          path: |
+            safety-results.json
+            pip-audit-results.json
+            sbom*.json
+            sbom*.xml
+          retention-days: 30
+
+  # Container security scanning
+  container-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.event_name == 'push' || github.event.pull_request.draft == false
+    strategy:
+      matrix:
+        target: [development, production, gpu]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          load: true
+          tags: pg-neo-graph-rl:${{ matrix.target }}-scan
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'pg-neo-graph-rl:${{ matrix.target }}-scan'
+          format: 'sarif'
+          output: 'trivy-${{ matrix.target }}-results.sarif'
+        continue-on-error: true
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          format: 'sarif'
+          output: 'trivy-fs-${{ matrix.target }}-results.sarif'
+        continue-on-error: true
+
+      - name: Upload Trivy scan results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+        with:
+          sarif_file: 'trivy-${{ matrix.target }}-results.sarif'
+          category: 'trivy-${{ matrix.target }}'
+        continue-on-error: true
+
+      - name: Generate Trivy JSON report
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'pg-neo-graph-rl:${{ matrix.target }}-scan'
+          format: 'json'
+          output: 'trivy-${{ matrix.target }}-results.json'
+        continue-on-error: true
+
+      - name: Upload container scan results
+        uses: actions/upload-artifact@v3
+        with:
+          name: container-scan-${{ matrix.target }}
+          path: |
+            trivy-*-results.*
+          retention-days: 30
+
+  # Secrets scanning
+  secrets-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install detect-secrets
+        run: pip install detect-secrets
+
+      - name: Run detect-secrets scan
+        run: |
+          detect-secrets scan --all-files --force-use-all-plugins --baseline .secrets.baseline
+        continue-on-error: true
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+        continue-on-error: true
+
+      - name: Upload secrets scan results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: secrets-scan-results
+          path: |
+            .secrets.baseline
+            gitleaks-report.json
+          retention-days: 30
+
+  # Infrastructure as Code (IaC) scanning
+  iac-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Checkov IaC scanner
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: .
+          framework: dockerfile,github_actions
+          output_format: sarif
+          output_file_path: checkov-results.sarif
+          quiet: true
+          soft_fail: true
+
+      - name: Upload Checkov scan results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+        with:
+          sarif_file: checkov-results.sarif
+          category: checkov
+        continue-on-error: true
+
+      - name: Upload IaC scan results
+        uses: actions/upload-artifact@v3
+        with:
+          name: iac-scan-results
+          path: checkov-results.sarif
+          retention-days: 30
+
+  # License compliance scanning
+  license-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+
+      - name: Install license scanning tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-licenses licensecheck
+
+      - name: Install project dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Generate license report
+        run: |
+          pip-licenses --format=json --output-file=licenses.json
+          pip-licenses --format=csv --output-file=licenses.csv
+          pip-licenses --format=html --output-file=licenses.html
+          licensecheck --format json > licensecheck-results.json
+        continue-on-error: true
+
+      - name: Check for GPL licenses
+        run: |
+          if pip-licenses | grep -i gpl; then
+            echo "Warning: GPL licenses detected. Review for compatibility."
+            pip-licenses | grep -i gpl > gpl-licenses.txt
+          fi
+        continue-on-error: true
+
+      - name: Upload license scan results
+        uses: actions/upload-artifact@v3
+        with:
+          name: license-scan-results
+          path: |
+            licenses.*
+            licensecheck-results.json
+            gpl-licenses.txt
+          retention-days: 30
+
+  # Security summary report
+  security-summary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [sast, dependency-scan, container-scan, secrets-scan, iac-scan, license-scan]
+    if: always()
+    steps:
+      - name: Download all scan results
+        uses: actions/download-artifact@v3
+        with:
+          path: scan-results/
+
+      - name: Generate security summary
+        run: |
+          echo "# Security Scan Summary" > security-summary.md
+          echo "" >> security-summary.md
+          echo "**Scan Date:** $(date)" >> security-summary.md
+          echo "**Repository:** ${{ github.repository }}" >> security-summary.md
+          echo "**Commit:** ${{ github.sha }}" >> security-summary.md
+          echo "" >> security-summary.md
+          
+          echo "## Scan Results" >> security-summary.md
+          echo "" >> security-summary.md
+          
+          # Check each scan type
+          for scan_type in sast dependency-scan container-scan secrets-scan iac-scan license-scan; do
+            if [[ -d "scan-results/$scan_type" ]]; then
+              echo "- ✅ $scan_type: Completed" >> security-summary.md
+            else
+              echo "- ❌ $scan_type: Failed or skipped" >> security-summary.md
+            fi
+          done
+          
+          echo "" >> security-summary.md
+          echo "## Recommendations" >> security-summary.md
+          echo "" >> security-summary.md
+          echo "1. Review all scan results in the Security tab" >> security-summary.md
+          echo "2. Address any HIGH or CRITICAL vulnerabilities" >> security-summary.md
+          echo "3. Update dependencies with known vulnerabilities" >> security-summary.md
+          echo "4. Review and rotate any exposed secrets" >> security-summary.md
+          echo "5. Ensure license compliance with project requirements" >> security-summary.md
+          
+          cat security-summary.md
+
+      - name: Upload security summary
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-summary
+          path: security-summary.md
+          retention-days: 90
+
+      - name: Comment PR with security summary (for PRs)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync('security-summary.md', 'utf8');
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: summary
+            });
+
+  # Security notification
+  notify-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [security-summary]
+    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    steps:
+      - name: Notify security team
+        run: |
+          echo "Security scan completed for ${{ github.repository }}"
+          echo "View results at: ${{ github.server_url }}/${{ github.repository }}/security"
+          # Add Slack/email notification for security team here
