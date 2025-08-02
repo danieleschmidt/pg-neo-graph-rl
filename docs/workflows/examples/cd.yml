@@ -1,0 +1,412 @@
+# GitHub Actions CD (Release) Workflow for PG-Neo-Graph-RL
+# Place this file in .github/workflows/cd.yml
+
+name: CD (Release)
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        default: 'v0.1.0'
+      prerelease:
+        description: 'Is this a pre-release?'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  PYTHONUNBUFFERED: 1
+  PYTHONDONTWRITEBYTECODE: 1
+
+jobs:
+  # Validate release
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is_prerelease: ${{ steps.version.outputs.is_prerelease }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version information
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION="${{ github.event.inputs.version }}"
+            IS_PRERELEASE="${{ github.event.inputs.prerelease }}"
+          elif [[ "${{ github.ref }}" =~ ^refs/tags/v([0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
+            VERSION="${BASH_REMATCH[1]}"
+            if [[ "$VERSION" =~ (alpha|beta|rc) ]]; then
+              IS_PRERELEASE="true"
+            else
+              IS_PRERELEASE="false"
+            fi
+          else
+            echo "Invalid release trigger"
+            exit 1
+          fi
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "is_prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+          echo "Release version: $VERSION (prerelease: $IS_PRERELEASE)"
+
+      - name: Validate version format
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$ ]]; then
+            echo "Invalid version format: $VERSION"
+            echo "Expected format: X.Y.Z or X.Y.Z-alpha.N, X.Y.Z-beta.N, X.Y.Z-rc.N"
+            exit 1
+          fi
+
+  # Run comprehensive tests before release
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: validate
+    strategy:
+      matrix:
+        python-version: ['3.9', '3.10', '3.11']
+        jax-version: ['cpu', 'gpu']
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,${{ matrix.jax-version }}]"
+
+      - name: Run comprehensive test suite
+        run: |
+          pytest tests/ -v --tb=short --cov=pg_neo_graph_rl --cov-report=xml
+
+      - name: Run benchmarks
+        run: |
+          pytest tests/benchmarks/ -v --benchmark-only
+
+  # Build packages
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [validate, test]
+    outputs:
+      wheel_name: ${{ steps.build.outputs.wheel_name }}
+      sdist_name: ${{ steps.build.outputs.sdist_name }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine hatch-vcs
+
+      - name: Build packages
+        id: build
+        run: |
+          python -m build
+          
+          # Extract package names
+          WHEEL_NAME=$(ls dist/*.whl | head -n1 | xargs basename)
+          SDIST_NAME=$(ls dist/*.tar.gz | head -n1 | xargs basename)
+          
+          echo "wheel_name=$WHEEL_NAME" >> $GITHUB_OUTPUT
+          echo "sdist_name=$SDIST_NAME" >> $GITHUB_OUTPUT
+          
+          echo "Built packages:"
+          ls -la dist/
+
+      - name: Verify packages
+        run: |
+          twine check dist/*
+          
+          # Test installation from wheel
+          pip install dist/*.whl
+          python -c "import pg_neo_graph_rl; print(f'Successfully imported pg_neo_graph_rl')"
+          pip uninstall -y pg-neo-graph-rl
+          
+          # Test installation from sdist
+          pip install dist/*.tar.gz
+          python -c "import pg_neo_graph_rl; print(f'Successfully imported pg_neo_graph_rl')"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: dist-packages
+          path: dist/
+          retention-days: 30
+
+  # Build and push Docker images
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [validate, test]
+    strategy:
+      matrix:
+        target: [development, production, gpu]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            pgneorl/pg-neo-graph-rl
+            ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}-${{ matrix.target }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=${{ needs.validate.outputs.version }}
+
+  # Deploy to PyPI
+  pypi-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [validate, build]
+    environment: pypi
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: dist-packages
+          path: dist/
+
+      - name: Publish to Test PyPI
+        if: needs.validate.outputs.is_prerelease == 'true'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+          repository-url: https://test.pypi.org/legacy/
+          packages-dir: dist/
+          print-hash: true
+
+      - name: Publish to PyPI
+        if: needs.validate.outputs.is_prerelease == 'false'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          packages-dir: dist/
+          print-hash: true
+
+  # Create GitHub Release
+  github-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [validate, build, pypi-deploy]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: dist-packages
+          path: dist/
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          
+          # Extract changelog section for this version
+          if [[ -f CHANGELOG.md ]]; then
+            NOTES=$(awk "/^## \[$VERSION\]/,/^## \[/{if(/^## \[/ && !/^## \[$VERSION\]/) exit; print}" CHANGELOG.md | head -n -1)
+          else
+            NOTES="Release $VERSION"
+          fi
+          
+          if [[ -z "$NOTES" ]]; then
+            NOTES="Release $VERSION
+            
+            See [CHANGELOG.md](CHANGELOG.md) for details."
+          fi
+          
+          # Save to file to handle multiline content
+          echo "$NOTES" > release_notes.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ needs.validate.outputs.version }}
+          name: Release v${{ needs.validate.outputs.version }}
+          body_path: release_notes.txt
+          draft: false
+          prerelease: ${{ needs.validate.outputs.is_prerelease == 'true' }}
+          files: |
+            dist/*.whl
+            dist/*.tar.gz
+          generate_release_notes: true
+
+  # Deploy documentation
+  docs-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [validate, test]
+    if: needs.validate.outputs.is_prerelease == 'false'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Build documentation
+        run: |
+          sphinx-build -W -b html docs docs/_build/html
+          
+          # Add version info to docs
+          echo "${{ needs.validate.outputs.version }}" > docs/_build/html/VERSION
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: docs/_build/html
+          cname: pg-neo-graph-rl.readthedocs.io
+
+  # Notify stakeholders
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [validate, build, pypi-deploy, github-release, docs-deploy]
+    if: always()
+    steps:
+      - name: Notify on success
+        if: |
+          needs.pypi-deploy.result == 'success' && 
+          needs.github-release.result == 'success'
+        run: |
+          echo "Release v${{ needs.validate.outputs.version }} completed successfully! 🎉"
+          echo "- PyPI: https://pypi.org/project/pg-neo-graph-rl/"
+          echo "- GitHub: ${{ github.server_url }}/${{ github.repository }}/releases/tag/v${{ needs.validate.outputs.version }}"
+          echo "- Docker: https://hub.docker.com/r/pgneorl/pg-neo-graph-rl"
+          # Add Slack/Discord/email notification here
+
+      - name: Notify on failure
+        if: |
+          needs.pypi-deploy.result == 'failure' || 
+          needs.github-release.result == 'failure'
+        run: |
+          echo "Release v${{ needs.validate.outputs.version }} failed! ❌"
+          echo "Check the workflow logs for details."
+          # Add Slack/Discord/email notification here
+
+  # Post-release tasks
+  post-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [validate, github-release]
+    if: needs.github-release.result == 'success' && needs.validate.outputs.is_prerelease == 'false'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Update version for next development cycle
+        run: |
+          # This is a placeholder for version bumping logic
+          # You might want to automatically update version numbers here
+          echo "Consider updating version numbers for next development cycle"
+
+      - name: Create post-release issue
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const version = '${{ needs.validate.outputs.version }}';
+            
+            const body = `
+            ## Post-Release Tasks for v${version}
+            
+            - [ ] Monitor PyPI download statistics
+            - [ ] Update conda-forge recipe (if applicable)
+            - [ ] Announce release on community channels
+            - [ ] Update documentation links
+            - [ ] Monitor for bug reports
+            - [ ] Plan next release milestones
+            
+            **Release Links:**
+            - [PyPI](https://pypi.org/project/pg-neo-graph-rl/${version}/)
+            - [GitHub Release](${context.payload.repository.html_url}/releases/tag/v${version})
+            - [Docker Images](https://hub.docker.com/r/pgneorl/pg-neo-graph-rl/tags)
+            `;
+            
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Post-release tasks for v${version}`,
+              body: body,
+              labels: ['release', 'maintenance']
+            });

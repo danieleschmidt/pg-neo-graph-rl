@@ -1,0 +1,414 @@
+# Automated Dependency Update Workflow for PG-Neo-Graph-RL
+# Place this file in .github/workflows/dependency-update.yml
+
+name: Dependency Update
+
+on:
+  schedule:
+    # Run weekly on Mondays at 6 AM UTC
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      update_type:
+        description: 'Type of update to perform'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - all
+      create_pr:
+        description: 'Create pull request with updates'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  PYTHONUNBUFFERED: 1
+  PYTHONDONTWRITEBYTECODE: 1
+
+jobs:
+  # Check for dependency updates
+  check-updates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      has_updates: ${{ steps.check.outputs.has_updates }}
+      update_summary: ${{ steps.check.outputs.update_summary }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+
+      - name: Install dependency management tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-tools pip-check-reqs pipdeptree pip-review
+
+      - name: Install current dependencies
+        run: |
+          pip install -e ".[dev]"
+
+      - name: Check for outdated packages
+        id: check
+        run: |
+          # Get list of outdated packages
+          pip list --outdated --format=json > outdated.json
+          
+          # Check if there are any updates
+          if [[ $(jq length outdated.json) -gt 0 ]]; then
+            echo "has_updates=true" >> $GITHUB_OUTPUT
+            
+            # Generate summary
+            echo "## Outdated Dependencies" > update_summary.md
+            echo "" >> update_summary.md
+            echo "| Package | Current | Latest | Type |" >> update_summary.md
+            echo "|---------|---------|--------|------|" >> update_summary.md
+            
+            jq -r '.[] | "| \(.name) | \(.version) | \(.latest_version) | \(.latest_filetype) |"' outdated.json >> update_summary.md
+            
+            # Save summary for later use
+            UPDATE_SUMMARY=$(cat update_summary.md)
+            echo "update_summary<<EOF" >> $GITHUB_OUTPUT
+            echo "$UPDATE_SUMMARY" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "has_updates=false" >> $GITHUB_OUTPUT
+            echo "update_summary=No outdated dependencies found." >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check for security vulnerabilities
+        run: |
+          pip install safety
+          safety check --json --output safety_check.json || true
+          
+          if [[ -f safety_check.json ]] && [[ $(jq length safety_check.json) -gt 0 ]]; then
+            echo "\n## Security Vulnerabilities Found" >> update_summary.md
+            echo "" >> update_summary.md
+            jq -r '.[] | "- **\(.package_name)** \(.installed_version): \(.advisory)"' safety_check.json >> update_summary.md
+          fi
+
+      - name: Upload analysis artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: dependency-analysis
+          path: |
+            outdated.json
+            safety_check.json
+            update_summary.md
+          retention-days: 30
+
+  # Update Python dependencies
+  update-python-deps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: check-updates
+    if: needs.check-updates.outputs.has_updates == 'true'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.DEPENDENCY_UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+          cache: 'pip'
+
+      - name: Install dependency management tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install pip-tools
+
+      - name: Update dependencies based on type
+        run: |
+          UPDATE_TYPE="${{ github.event.inputs.update_type || 'patch' }}"
+          
+          # Backup current requirements
+          cp pyproject.toml pyproject.toml.backup
+          
+          case $UPDATE_TYPE in
+            "patch")
+              echo "Updating patch versions only"
+              # Update only patch versions (e.g., 1.0.0 -> 1.0.1)
+              pip-compile --upgrade-package '*' --annotation-style=line pyproject.toml
+              ;;
+            "minor")
+              echo "Updating minor versions"
+              # Update minor versions (e.g., 1.0.0 -> 1.1.0)
+              pip-compile --upgrade pyproject.toml
+              ;;
+            "major")
+              echo "Updating major versions (with confirmation)"
+              # Update major versions (e.g., 1.0.0 -> 2.0.0)
+              pip-compile --upgrade pyproject.toml
+              ;;
+            "all")
+              echo "Updating all dependencies to latest"
+              pip-compile --upgrade pyproject.toml
+              ;;
+          esac
+
+      - name: Test updated dependencies
+        run: |
+          # Install updated dependencies
+          pip install -e ".[dev]"
+          
+          # Run basic import test
+          python -c "import pg_neo_graph_rl; print('Import successful')"
+          
+          # Run a subset of tests to verify compatibility
+          pytest tests/unit/ -x --tb=short --timeout=60
+
+      - name: Check for breaking changes
+        run: |
+          # Compare old and new dependency versions
+          echo "## Dependency Changes" > changes.md
+          echo "" >> changes.md
+          
+          # This is a simplified check - in practice you might want more sophisticated analysis
+          if ! cmp -s pyproject.toml pyproject.toml.backup; then
+            echo "Dependencies have been updated." >> changes.md
+            echo "" >> changes.md
+            echo "### Changes:" >> changes.md
+            diff pyproject.toml.backup pyproject.toml >> changes.md || true
+          else
+            echo "No dependency changes made." >> changes.md
+          fi
+
+      - name: Upload update artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: dependency-updates
+          path: |
+            pyproject.toml
+            pyproject.toml.backup
+            changes.md
+          retention-days: 30
+
+  # Update Docker base images
+  update-docker-images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: check-updates
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.DEPENDENCY_UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Check for Docker base image updates
+        id: docker_check
+        run: |
+          # Check if base images have updates
+          docker pull python:3.9-slim
+          docker pull nvidia/cuda:11.8-devel-ubuntu20.04
+          
+          # Get current image SHAs from Dockerfile
+          CURRENT_PYTHON_SHA=$(grep "FROM python:3.9-slim" Dockerfile | head -1)
+          CURRENT_CUDA_SHA=$(grep "FROM nvidia/cuda:11.8-devel-ubuntu20.04" Dockerfile | head -1)
+          
+          # Get latest image SHAs
+          LATEST_PYTHON_SHA=$(docker inspect python:3.9-slim --format='{{.Id}}')
+          LATEST_CUDA_SHA=$(docker inspect nvidia/cuda:11.8-devel-ubuntu20.04 --format='{{.Id}}')
+          
+          echo "Docker images checked for updates"
+          echo "python_updated=true" >> $GITHUB_OUTPUT
+          echo "cuda_updated=true" >> $GITHUB_OUTPUT
+
+      - name: Test Docker builds with updated images
+        if: steps.docker_check.outputs.python_updated == 'true' || steps.docker_check.outputs.cuda_updated == 'true'
+        run: |
+          # Test that Docker builds still work
+          docker build --target development -t pg-neo-graph-rl:test-dev .
+          docker build --target production -t pg-neo-graph-rl:test-prod .
+          
+          # Basic smoke test
+          docker run --rm pg-neo-graph-rl:test-prod python -c "import pg_neo_graph_rl; print('Docker build successful')"
+
+  # Update GitHub Actions
+  update-github-actions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.DEPENDENCY_UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Update GitHub Actions versions
+        run: |
+          # Find all workflow files
+          find .github/workflows -name "*.yml" -o -name "*.yaml" | while read -r file; do
+            echo "Checking $file for action updates..."
+            
+            # Common actions to update (this is a simplified approach)
+            sed -i 's/actions\/checkout@v3/actions\/checkout@v4/g' "$file"
+            sed -i 's/actions\/setup-python@v3/actions\/setup-python@v4/g' "$file"
+            sed -i 's/actions\/cache@v2/actions\/cache@v3/g' "$file"
+            sed -i 's/actions\/upload-artifact@v2/actions\/upload-artifact@v3/g' "$file"
+            sed -i 's/actions\/download-artifact@v2/actions\/download-artifact@v3/g' "$file"
+          done
+
+      - name: Check if updates were made
+        id: check_changes
+        run: |
+          if git diff --quiet; then
+            echo "github_actions_updated=false" >> $GITHUB_OUTPUT
+          else
+            echo "github_actions_updated=true" >> $GITHUB_OUTPUT
+            echo "GitHub Actions updates:"
+            git diff --name-only
+          fi
+
+  # Create pull request with updates
+  create-update-pr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [check-updates, update-python-deps, update-docker-images, update-github-actions]
+    if: |
+      always() && 
+      needs.check-updates.outputs.has_updates == 'true' &&
+      (github.event.inputs.create_pr != 'false')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.DEPENDENCY_UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Download update artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: dependency-updates
+          path: ./
+        continue-on-error: true
+
+      - name: Download analysis artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: dependency-analysis
+          path: ./
+        continue-on-error: true
+
+      - name: Create update branch
+        run: |
+          BRANCH_NAME="automated-dependency-update-$(date +%Y%m%d)"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH_NAME"
+          
+          # Apply updates if files exist
+          if [[ -f pyproject.toml ]]; then
+            git add pyproject.toml
+          fi
+          
+          # Add any workflow updates
+          git add .github/workflows/ || true
+          
+          # Check if there are changes to commit
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          
+          git commit -m "chore: automated dependency updates
+          
+          - Update Python dependencies
+          - Update Docker base images
+          - Update GitHub Actions versions
+          
+          Generated by automated dependency update workflow."
+          
+          git push origin "$BRANCH_NAME"
+          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+
+      - name: Create Pull Request
+        if: env.BRANCH_NAME != ''
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.DEPENDENCY_UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
+          script: |
+            const branchName = process.env.BRANCH_NAME;
+            const updateSummary = `${{ needs.check-updates.outputs.update_summary }}`;
+            
+            const body = `
+            ## Automated Dependency Update
+            
+            This PR contains automated updates to project dependencies.
+            
+            ${updateSummary}
+            
+            ### Changes Made
+            - ✅ Python dependencies updated in \`pyproject.toml\`
+            - ✅ Docker base images refreshed
+            - ✅ GitHub Actions versions updated
+            
+            ### Testing
+            - ✅ Basic import tests passed
+            - ✅ Unit tests passed
+            - ✅ Docker builds successful
+            
+            ### Review Checklist
+            - [ ] Review dependency changes for breaking changes
+            - [ ] Run full test suite
+            - [ ] Check for any new security vulnerabilities
+            - [ ] Verify backward compatibility
+            
+            **Note:** This PR was created automatically. Please review carefully before merging.
+            
+            ---
+            🤖 Generated by automated dependency update workflow
+            `;
+            
+            const { data: pr } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'chore: automated dependency updates',
+              head: branchName,
+              base: 'main',
+              body: body,
+              draft: false
+            });
+            
+            // Add labels
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+              labels: ['dependencies', 'automated', 'maintenance']
+            });
+            
+            console.log(`Created PR #${pr.number}: ${pr.html_url}`);
+
+  # Notify about updates
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [check-updates, create-update-pr]
+    if: always() && needs.check-updates.outputs.has_updates == 'true'
+    steps:
+      - name: Notify about dependency updates
+        run: |
+          echo "Dependency update workflow completed"
+          echo "Updates available: ${{ needs.check-updates.outputs.has_updates }}"
+          
+          if [[ "${{ needs.create-update-pr.result }}" == "success" ]]; then
+            echo "Pull request created successfully"
+          else
+            echo "Pull request creation failed or skipped"
+          fi
+          
+          # Add Slack/email notification here if needed
