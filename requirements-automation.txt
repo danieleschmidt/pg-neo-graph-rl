@@ -1,0 +1,39 @@
+# Automation and Monitoring Dependencies for PG-Neo-Graph-RL
+# These packages support the comprehensive automation infrastructure
+
+# Core automation dependencies
+aiohttp>=3.8.0              # Web framework for dashboard and APIs
+aiohttp-cors>=0.7.0         # CORS support for web APIs
+schedule>=1.2.0             # Task scheduling
+psutil>=5.9.0               # System metrics collection
+
+# Optional monitoring enhancements
+prometheus-client>=0.16.0   # Prometheus metrics export
+grafana-api>=1.0.3         # Grafana dashboard management (optional)
+
+# Security and quality tools
+bandit>=1.7.0              # Security linting
+safety>=2.3.0              # Dependency vulnerability scanning
+ruff>=0.0.260              # Fast Python linter
+
+# Testing and coverage tools
+pytest>=7.0.0              # Testing framework
+pytest-cov>=4.0.0          # Coverage reporting
+pytest-json-report>=1.5.0  # JSON test reports
+pytest-asyncio>=0.21.0     # Async test support
+
+# Development and build tools
+mypy>=1.0.0                # Type checking
+black>=23.0.0              # Code formatting
+isort>=5.12.0              # Import sorting
+pip-audit>=2.5.0           # Alternative vulnerability scanning
+pip-tools>=6.12.0          # Dependency management
+
+# Optional notification integrations
+# slack-sdk>=3.20.0        # Slack notifications (optional)
+# sendgrid>=6.9.0          # Email notifications (optional)
+# twilio>=8.2.0            # SMS notifications (optional)
+
+# Documentation generation (optional)
+# sphinx>=6.1.0            # Documentation generation
+# sphinx-rtd-theme>=1.2.0  # Read the Docs theme
