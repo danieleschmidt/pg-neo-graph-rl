@@ -1,0 +1,474 @@
+name: Security Scanning
+
+on:
+  schedule:
+    # Run daily security scans at 2 AM UTC
+    - cron: '0 2 * * *'
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      scan_type:
+        description: 'Type of security scan to perform'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+          - quick
+          - full
+          - compliance
+
+env:
+  DEFAULT_PYTHON: "3.9"
+
+jobs:
+  dependency-security:
+    name: Dependency Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.DEFAULT_PYTHON }}
+
+      - name: Install security tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install safety bandit semgrep
+
+      - name: Install project dependencies
+        run: |
+          pip install -e ".[dev,monitoring,benchmarks]"
+
+      - name: Run safety check (known vulnerabilities)
+        run: |
+          echo "## Safety Check Results" >> security-report.md
+          echo "Checking for known security vulnerabilities in dependencies..." >> security-report.md
+          
+          if safety check --json --output safety-results.json; then
+            echo "✅ No known vulnerabilities found" >> security-report.md
+          else
+            echo "⚠️ Security vulnerabilities detected:" >> security-report.md
+            cat safety-results.json | jq -r '.[] | "- **\(.package)**: \(.vulnerability) (Advisory: \(.advisory))"' >> security-report.md
+            exit 1
+          fi
+
+      - name: Run pip-audit (alternative vulnerability scanner)
+        run: |
+          pip install pip-audit
+          echo "" >> security-report.md
+          echo "## Pip-Audit Results" >> security-report.md
+          
+          if pip-audit --format=json --output=pip-audit-results.json; then
+            echo "✅ No vulnerabilities found by pip-audit" >> security-report.md
+          else
+            echo "⚠️ Vulnerabilities found by pip-audit:" >> security-report.md
+            cat pip-audit-results.json | jq -r '.vulnerabilities[] | "- **\(.package)**: \(.id) - \(.description)"' >> security-report.md
+          fi
+
+      - name: Upload security results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: dependency-security-results
+          path: |
+            safety-results.json
+            pip-audit-results.json
+            security-report.md
+
+  code-security:
+    name: Code Security Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.DEFAULT_PYTHON }}
+
+      - name: Install security tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit semgrep
+
+      - name: Run Bandit (Python security linter)
+        run: |
+          echo "## Bandit Security Analysis" >> code-security-report.md
+          echo "Scanning Python code for common security issues..." >> code-security-report.md
+          
+          bandit -r pg_neo_graph_rl/ -f json -o bandit-results.json || true
+          
+          # Check if issues were found
+          if [ -s bandit-results.json ] && [ "$(cat bandit-results.json | jq '.results | length')" -gt 0 ]; then
+            echo "⚠️ Security issues found:" >> code-security-report.md
+            cat bandit-results.json | jq -r '.results[] | "- **\(.test_name)** in \(.filename):\(.line_number): \(.issue_text)"' >> code-security-report.md
+            echo "::warning::Bandit found potential security issues"
+          else
+            echo "✅ No security issues found by Bandit" >> code-security-report.md
+          fi
+
+      - name: Run Semgrep (advanced static analysis)
+        run: |
+          echo "" >> code-security-report.md
+          echo "## Semgrep Security Analysis" >> code-security-report.md
+          
+          # Run semgrep with security-focused rules
+          semgrep --config=auto --json --output=semgrep-results.json pg_neo_graph_rl/ || true
+          
+          if [ -s semgrep-results.json ] && [ "$(cat semgrep-results.json | jq '.results | length')" -gt 0 ]; then
+            echo "⚠️ Semgrep findings:" >> code-security-report.md
+            cat semgrep-results.json | jq -r '.results[] | "- **\(.check_id)** in \(.path):\(.start.line): \(.extra.message)"' >> code-security-report.md
+            echo "::warning::Semgrep found potential issues"
+          else
+            echo "✅ No issues found by Semgrep" >> code-security-report.md
+          fi
+
+      - name: Check for secrets in code
+        run: |
+          echo "" >> code-security-report.md
+          echo "## Secret Detection" >> code-security-report.md
+          
+          # Simple pattern matching for common secrets
+          if grep -r -i -E "(password|secret|key|token|api_key)" --include="*.py" pg_neo_graph_rl/ | grep -v "test" | grep -v "#" | head -10; then
+            echo "⚠️ Potential secrets or credentials found in code" >> code-security-report.md
+            echo "Please review the above findings manually" >> code-security-report.md
+            echo "::warning::Potential secrets found in code"
+          else
+            echo "✅ No obvious secrets detected in code" >> code-security-report.md
+          fi
+
+      - name: Upload code security results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: code-security-results
+          path: |
+            bandit-results.json
+            semgrep-results.json
+            code-security-report.md
+
+  dockerfile-security:
+    name: Dockerfile Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Hadolint (Dockerfile linter)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+          format: json
+          output-file: hadolint-results.json
+          failure-threshold: warning
+
+      - name: Run Trivy (container vulnerability scanner)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: 'Dockerfile'
+          format: 'json'
+          output: 'trivy-config-results.json'
+
+      - name: Generate Dockerfile security report
+        run: |
+          echo "## Dockerfile Security Analysis" > dockerfile-security-report.md
+          
+          # Process Hadolint results
+          if [ -f hadolint-results.json ] && [ -s hadolint-results.json ]; then
+            echo "### Hadolint Results" >> dockerfile-security-report.md
+            if [ "$(cat hadolint-results.json | jq '. | length')" -gt 0 ]; then
+              echo "⚠️ Dockerfile issues found:" >> dockerfile-security-report.md
+              cat hadolint-results.json | jq -r '.[] | "- **\(.level)**: \(.message) (Rule: \(.code))"' >> dockerfile-security-report.md
+            else
+              echo "✅ No Dockerfile issues found" >> dockerfile-security-report.md
+            fi
+          fi
+          
+          # Process Trivy results
+          if [ -f trivy-config-results.json ] && [ -s trivy-config-results.json ]; then
+            echo "" >> dockerfile-security-report.md
+            echo "### Trivy Configuration Scan" >> dockerfile-security-report.md
+            if [ "$(cat trivy-config-results.json | jq '.Results | length')" -gt 0 ]; then
+              echo "⚠️ Configuration issues found:" >> dockerfile-security-report.md
+              cat trivy-config-results.json | jq -r '.Results[]?.Misconfigurations[]? | "- **\(.Severity)**: \(.Title) - \(.Description)"' >> dockerfile-security-report.md
+            else
+              echo "✅ No configuration issues found" >> dockerfile-security-report.md
+            fi
+          fi
+
+      - name: Upload Dockerfile security results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: dockerfile-security-results
+          path: |
+            hadolint-results.json
+            trivy-config-results.json
+            dockerfile-security-report.md
+
+  container-security:
+    name: Container Image Security Scan
+    runs-on: ubuntu-latest
+    needs: [dependency-security, code-security]
+    if: github.event.inputs.scan_type != 'quick'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build test image
+        run: |
+          docker build -t pg-neo-graph-rl:security-test .
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'pg-neo-graph-rl:security-test'
+          format: 'json'
+          output: 'trivy-image-results.json'
+
+      - name: Run Grype vulnerability scanner
+        run: |
+          # Install Grype
+          curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+          
+          # Scan the image
+          grype pg-neo-graph-rl:security-test -o json > grype-results.json
+
+      - name: Generate container security report
+        run: |
+          echo "## Container Image Security Analysis" > container-security-report.md
+          
+          # Process Trivy results
+          echo "### Trivy Vulnerability Scan" >> container-security-report.md
+          if [ -f trivy-image-results.json ]; then
+            critical_count=$(cat trivy-image-results.json | jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL")] | length')
+            high_count=$(cat trivy-image-results.json | jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH")] | length')
+            
+            if [ "$critical_count" -gt 0 ] || [ "$high_count" -gt 0 ]; then
+              echo "⚠️ High/Critical vulnerabilities found:" >> container-security-report.md
+              echo "- Critical: $critical_count" >> container-security-report.md
+              echo "- High: $high_count" >> container-security-report.md
+              
+              # Show top 10 critical/high vulnerabilities
+              cat trivy-image-results.json | jq -r '.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL" or .Severity == "HIGH") | "- **\(.Severity)**: \(.VulnerabilityID) in \(.PkgName) - \(.Title)"' | head -10 >> container-security-report.md
+            else
+              echo "✅ No critical or high severity vulnerabilities found" >> container-security-report.md
+            fi
+          fi
+          
+          # Process Grype results
+          echo "" >> container-security-report.md
+          echo "### Grype Vulnerability Scan" >> container-security-report.md
+          if [ -f grype-results.json ]; then
+            vuln_count=$(cat grype-results.json | jq '.matches | length')
+            if [ "$vuln_count" -gt 0 ]; then
+              echo "⚠️ $vuln_count vulnerabilities found by Grype" >> container-security-report.md
+            else
+              echo "✅ No vulnerabilities found by Grype" >> container-security-report.md
+            fi
+          fi
+
+      - name: Upload container security results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: container-security-results
+          path: |
+            trivy-image-results.json
+            grype-results.json
+            container-security-report.md
+
+  compliance-check:
+    name: Compliance & Policy Check
+    runs-on: ubuntu-latest
+    if: github.event.inputs.scan_type == 'full' || github.event.inputs.scan_type == 'compliance'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.DEFAULT_PYTHON }}
+
+      - name: Check license compliance
+        run: |
+          echo "## License Compliance Check" > compliance-report.md
+          
+          # Install license checker
+          pip install pip-licenses
+          
+          # Generate license report
+          pip-licenses --format=json --output-file=licenses.json
+          
+          # Check for problematic licenses
+          problematic_licenses=("GPL" "AGPL" "LGPL")
+          echo "### License Analysis" >> compliance-report.md
+          
+          for license in "${problematic_licenses[@]}"; do
+            if cat licenses.json | jq -r '.[].License' | grep -i "$license"; then
+              echo "⚠️ Potentially problematic license found: $license" >> compliance-report.md
+              echo "::warning::Found $license licensed dependency"
+            fi
+          done
+          
+          echo "✅ License compliance check completed" >> compliance-report.md
+
+      - name: Check code standards compliance
+        run: |
+          echo "" >> compliance-report.md
+          echo "## Code Standards Compliance" >> compliance-report.md
+          
+          # Install tools
+          pip install -e ".[dev]"
+          
+          # Check if code follows standards
+          echo "### Code Formatting (Black)" >> compliance-report.md
+          if black --check pg_neo_graph_rl/; then
+            echo "✅ Code formatting compliant" >> compliance-report.md
+          else
+            echo "❌ Code formatting violations found" >> compliance-report.md
+            echo "::error::Code formatting violations"
+          fi
+          
+          echo "" >> compliance-report.md
+          echo "### Import Sorting (isort)" >> compliance-report.md
+          if isort --check-only pg_neo_graph_rl/; then
+            echo "✅ Import sorting compliant" >> compliance-report.md
+          else
+            echo "❌ Import sorting violations found" >> compliance-report.md
+            echo "::error::Import sorting violations"
+          fi
+
+      - name: Check documentation compliance
+        run: |
+          echo "" >> compliance-report.md
+          echo "## Documentation Compliance" >> compliance-report.md
+          
+          # Check for required files
+          required_files=("README.md" "LICENSE" "SECURITY.md" "CONTRIBUTING.md")
+          
+          for file in "${required_files[@]}"; do
+            if [ -f "$file" ]; then
+              echo "✅ $file present" >> compliance-report.md
+            else
+              echo "❌ $file missing" >> compliance-report.md
+              echo "::warning::Missing required file: $file"
+            fi
+          done
+
+      - name: Upload compliance results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: compliance-results
+          path: |
+            licenses.json
+            compliance-report.md
+
+  security-report:
+    name: Generate Security Report
+    runs-on: ubuntu-latest
+    needs: [dependency-security, code-security, dockerfile-security, container-security, compliance-check]
+    if: always()
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+
+      - name: Generate comprehensive security report
+        run: |
+          echo "# Security Scan Report" > SECURITY_REPORT.md
+          echo "" >> SECURITY_REPORT.md
+          echo "**Scan Date:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> SECURITY_REPORT.md
+          echo "**Repository:** ${{ github.repository }}" >> SECURITY_REPORT.md
+          echo "**Branch:** ${{ github.ref_name }}" >> SECURITY_REPORT.md
+          echo "**Commit:** ${{ github.sha }}" >> SECURITY_REPORT.md
+          echo "" >> SECURITY_REPORT.md
+          
+          # Combine all reports
+          echo "## Executive Summary" >> SECURITY_REPORT.md
+          echo "" >> SECURITY_REPORT.md
+          
+          # Count total issues
+          total_issues=0
+          
+          # Add individual reports
+          for report_dir in */; do
+            if [ -d "$report_dir" ]; then
+              echo "### $report_dir Results" >> SECURITY_REPORT.md
+              for report_file in "$report_dir"/*-report.md; do
+                if [ -f "$report_file" ]; then
+                  cat "$report_file" >> SECURITY_REPORT.md
+                  echo "" >> SECURITY_REPORT.md
+                fi
+              done
+            fi
+          done
+          
+          echo "---" >> SECURITY_REPORT.md
+          echo "*Report generated by GitHub Actions Security Workflow*" >> SECURITY_REPORT.md
+
+      - name: Upload comprehensive security report
+        uses: actions/upload-artifact@v3
+        with:
+          name: comprehensive-security-report
+          path: SECURITY_REPORT.md
+
+      - name: Comment on PR (if applicable)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            if (fs.existsSync('SECURITY_REPORT.md')) {
+              const report = fs.readFileSync('SECURITY_REPORT.md', 'utf8');
+              const truncatedReport = report.length > 60000 ? 
+                report.substring(0, 60000) + '\n\n... (report truncated)' : 
+                report;
+              
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `## 🔒 Security Scan Results\n\n${truncatedReport}`
+              });
+            }
+
+  notify-security-team:
+    name: Notify Security Team
+    runs-on: ubuntu-latest
+    needs: [security-report]
+    if: failure() && (github.ref == 'refs/heads/main' || github.event_name == 'schedule')
+    steps:
+      - name: Send security alert
+        run: |
+          echo "🚨 Security scan failed for ${{ github.repository }}"
+          echo "Critical security issues may have been detected."
+          echo "Please review the security report immediately."
+          
+          # Send notification to security team
+          # Uncomment and configure your notification method:
+          
+          # Slack notification
+          # curl -X POST -H 'Content-type: application/json' \
+          #   --data '{"text":"🚨 Security scan failed for ${{ github.repository }}. Please review immediately."}' \
+          #   ${{ secrets.SECURITY_SLACK_WEBHOOK_URL }}
+          
+          # Email notification (using sendgrid, ses, etc.)
+          # python scripts/send_security_alert.py
+          
+          # Teams notification
+          # curl -X POST -H 'Content-type: application/json' \
+          #   --data '{"text":"🚨 Security scan failed for ${{ github.repository }}. Please review immediately."}' \
+          #   ${{ secrets.SECURITY_TEAMS_WEBHOOK_URL }}
