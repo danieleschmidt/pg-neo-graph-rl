@@ -558,7 +558,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 ```bibtex
 @article{pg_neo_graph_rl,
   title={Federated Graph Neural Reinforcement Learning for Distributed Control},
-  author={Your Name},
+  author={Daniel Schmidt},
   journal={Conference on Neural Information Processing Systems},
   year={2025}
 }
