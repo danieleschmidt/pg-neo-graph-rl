@@ -1,0 +1,132 @@
+version: '3.8'
+
+services:
+  # Main pg-neo-graph-rl application
+  pg-neo-app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: pg-neo-graph-rl-app
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      - ENABLE_MONITORING=true
+      - MAX_AGENTS=100
+      - CACHE_SIZE=1000
+    volumes:
+      - ../data:/app/data
+      - ../logs:/app/logs
+    ports:
+      - "8080:8080"  # API port
+    depends_on:
+      - redis
+      - prometheus
+    networks:
+      - pg-neo-network
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import requests; requests.get('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Redis for caching and session storage
+  redis:
+    image: redis:7-alpine
+    container_name: pg-neo-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - pg-neo-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Prometheus for metrics collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: pg-neo-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=168h'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ../docker/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - pg-neo-network
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: pg-neo-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=pg_neo_admin_2025
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SECURITY_DISABLE_GRAVATAR=true
+    volumes:
+      - ../docker/grafana/provisioning:/etc/grafana/provisioning
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - pg-neo-network
+
+  # AlertManager for alerting
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: pg-neo-alertmanager
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    volumes:
+      - ../docker/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - alertmanager_data:/alertmanager
+    ports:
+      - "9093:9093"
+    networks:
+      - pg-neo-network
+
+  # NGINX reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: pg-neo-nginx
+    restart: unless-stopped
+    volumes:
+      - ../deployment/nginx.conf:/etc/nginx/nginx.conf
+      - ../deployment/ssl:/etc/nginx/ssl
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - pg-neo-app
+      - grafana
+    networks:
+      - pg-neo-network
+
+volumes:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+  alertmanager_data:
+
+networks:
+  pg-neo-network:
+    driver: bridge
