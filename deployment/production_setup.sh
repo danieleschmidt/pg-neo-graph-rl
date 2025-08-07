@@ -1,12 +1,18 @@
 #!/bin/bash
 
-# Production deployment setup script for pg-neo-graph-rl
-# This script sets up the production environment with all necessary components
+# Sentiment Analyzer Pro - Production Setup Script
+# This script sets up the complete production environment
 
-set -e  # Exit on any error
+set -e
 
-echo "🚀 Starting pg-neo-graph-rl Production Deployment"
-echo "=================================================="
+echo "🚀 Setting up Sentiment Analyzer Pro production environment..."
+echo "==============================================================="
+
+# Configuration
+PROJECT_NAME="sentiment-analyzer-pro"
+DEPLOY_DIR="/opt/${PROJECT_NAME}"
+LOG_DIR="/var/log/${PROJECT_NAME}"
+CONFIG_DIR="/etc/${PROJECT_NAME}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -15,333 +21,426 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Configuration
-DEPLOYMENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$DEPLOYMENT_DIR")"
-DATA_DIR="$PROJECT_ROOT/data"
-LOGS_DIR="$PROJECT_ROOT/logs"
-BACKUP_DIR="$PROJECT_ROOT/backups"
-
-# Functions
-log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+# Logging function
+log() {
+    echo -e "${GREEN}[$(date +'%Y-%m-%d %H:%M:%S')] $1${NC}"
 }
 
-log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+warn() {
+    echo -e "${YELLOW}[WARNING] $1${NC}"
 }
 
-log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
+error() {
+    echo -e "${RED}[ERROR] $1${NC}"
+    exit 1
 }
 
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
+# Check if running as root
+if [[ $EUID -eq 0 ]]; then
+   error "This script should not be run as root for security reasons"
+fi
 
+# Check system requirements
 check_requirements() {
-    log_info "Checking system requirements..."
+    log "Checking system requirements..."
     
     # Check Docker
     if ! command -v docker &> /dev/null; then
-        log_error "Docker is not installed. Please install Docker first."
-        exit 1
+        error "Docker is not installed. Please install Docker first."
     fi
     
     # Check Docker Compose
     if ! command -v docker-compose &> /dev/null; then
-        log_error "Docker Compose is not installed. Please install Docker Compose first."
-        exit 1
+        error "Docker Compose is not installed. Please install Docker Compose first."
     fi
     
     # Check available memory
-    AVAILABLE_MEMORY=$(free -m | awk 'NR==2{printf "%.0f", $7}')
-    if [ "$AVAILABLE_MEMORY" -lt 4096 ]; then
-        log_warning "Available memory is less than 4GB. Recommended: 8GB+"
+    TOTAL_MEM=$(free -g | awk '/^Mem:/{print $2}')
+    if [ "$TOTAL_MEM" -lt 4 ]; then
+        warn "Less than 4GB RAM available. Performance may be affected."
     fi
     
     # Check available disk space
-    AVAILABLE_DISK=$(df -BG "$PROJECT_ROOT" | awk 'NR==2{print $4}' | sed 's/G//')
-    if [ "$AVAILABLE_DISK" -lt 20 ]; then
-        log_warning "Available disk space is less than 20GB. Recommended: 50GB+"
+    AVAILABLE_SPACE=$(df -h . | awk 'NR==2 {print $4}' | sed 's/G//')
+    if [ "${AVAILABLE_SPACE%.*}" -lt 10 ]; then
+        warn "Less than 10GB disk space available."
     fi
     
-    log_success "System requirements check completed"
+    log "✅ System requirements check completed"
 }
 
-create_directories() {
-    log_info "Creating necessary directories..."
+# Setup directories
+setup_directories() {
+    log "Setting up directories..."
     
-    mkdir -p "$DATA_DIR"/{models,metrics,checkpoints}
-    mkdir -p "$LOGS_DIR"/{app,nginx,monitoring}
-    mkdir -p "$BACKUP_DIR"
-    mkdir -p "$PROJECT_ROOT/deployment/ssl"
+    sudo mkdir -p ${DEPLOY_DIR}
+    sudo mkdir -p ${LOG_DIR}
+    sudo mkdir -p ${CONFIG_DIR}
+    sudo mkdir -p /opt/${PROJECT_NAME}/{models,cache,nginx,monitoring}
     
-    # Set proper permissions
-    chmod 755 "$DATA_DIR" "$LOGS_DIR" "$BACKUP_DIR"
+    # Set permissions
+    sudo chown -R $USER:$USER ${DEPLOY_DIR}
+    sudo chown -R $USER:$USER ${LOG_DIR}
     
-    log_success "Directories created successfully"
+    log "✅ Directories created successfully"
 }
 
-setup_ssl() {
-    log_info "Setting up SSL certificates..."
+# Copy application files
+setup_application() {
+    log "Setting up application files..."
     
-    SSL_DIR="$PROJECT_ROOT/deployment/ssl"
+    # Copy source code
+    cp -r . ${DEPLOY_DIR}/
+    cd ${DEPLOY_DIR}
     
-    if [ ! -f "$SSL_DIR/server.crt" ] || [ ! -f "$SSL_DIR/server.key" ]; then
-        log_info "Generating self-signed SSL certificate..."
-        
-        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-            -keyout "$SSL_DIR/server.key" \
-            -out "$SSL_DIR/server.crt" \
-            -subj "/C=US/ST=State/L=City/O=Organization/CN=pg-neo-graph-rl"
-        
-        log_success "Self-signed SSL certificate generated"
-    else
-        log_info "SSL certificates already exist"
-    fi
-}
-
-setup_environment() {
-    log_info "Setting up environment configuration..."
-    
-    # Create production environment file
-    cat > "$PROJECT_ROOT/.env.production" << EOF
-# pg-neo-graph-rl Production Configuration
-ENVIRONMENT=production
+    # Create environment file
+    cat > .env << EOF
+# Sentiment Analyzer Pro - Production Configuration
 LOG_LEVEL=INFO
-DEBUG=false
-
-# Application Settings
-MAX_AGENTS=100
-CACHE_SIZE=1000
-BATCH_SIZE=32
-LEARNING_RATE=3e-4
-
-# Monitoring
-ENABLE_MONITORING=true
-PROMETHEUS_PORT=9090
-GRAFANA_PORT=3000
-
-# Security
-SESSION_SECRET=$(openssl rand -hex 32)
-JWT_SECRET=$(openssl rand -hex 32)
-
-# Database
+MODEL_CACHE_DIR=/app/models
 REDIS_URL=redis://redis:6379
+PROMETHEUS_URL=http://prometheus:9090
+MAX_WORKERS=4
+BATCH_SIZE=32
+ENABLE_MONITORING=true
+ENABLE_CACHING=true
+ENABLE_SECURITY=true
+EOF
+    
+    log "✅ Application files setup completed"
+}
 
-# Resource Limits
-MAX_MEMORY_USAGE=0.85
-GC_THRESHOLD=0.75
-EMERGENCY_THRESHOLD=0.95
+# Setup Nginx configuration
+setup_nginx() {
+    log "Setting up Nginx configuration..."
+    
+    mkdir -p nginx/ssl
+    
+    # Create Nginx config
+    cat > nginx/nginx.conf << 'EOF'
+worker_processes auto;
+error_log /var/log/nginx/error.log warn;
+pid /var/run/nginx.pid;
 
-# Auto-scaling
-MIN_AGENTS=1
-MAX_AGENTS=100
-SCALING_COOLDOWN=60
+events {
+    worker_connections 1024;
+    use epoll;
+    multi_accept on;
+}
 
-# Networking
-API_PORT=8080
-WORKER_PROCESSES=4
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+
+    # Logging
+    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
+                   '$status $body_bytes_sent "$http_referer" '
+                   '"$http_user_agent" "$http_x_forwarded_for"';
+    
+    access_log /var/log/nginx/access.log main;
+
+    # Performance
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 65;
+    types_hash_max_size 2048;
+    client_max_body_size 10M;
+
+    # Gzip compression
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1000;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+
+    # Rate limiting
+    limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
+    limit_conn_zone $binary_remote_addr zone=addr:10m;
+
+    # Upstream
+    upstream sentiment_api {
+        server sentiment-analyzer:8000;
+        keepalive 32;
+    }
+
+    # HTTP to HTTPS redirect
+    server {
+        listen 80;
+        server_name _;
+        return 301 https://$server_name$request_uri;
+    }
+
+    # Main server block
+    server {
+        listen 443 ssl http2;
+        server_name _;
+
+        # SSL configuration (replace with your certificates)
+        ssl_certificate /etc/nginx/ssl/cert.pem;
+        ssl_certificate_key /etc/nginx/ssl/key.pem;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384;
+        ssl_prefer_server_ciphers off;
+
+        # Security headers
+        add_header X-Frame-Options DENY;
+        add_header X-Content-Type-Options nosniff;
+        add_header X-XSS-Protection "1; mode=block";
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains";
+
+        # Rate limiting
+        limit_req zone=api burst=20 nodelay;
+        limit_conn addr 10;
+
+        # API proxy
+        location /api/ {
+            proxy_pass http://sentiment_api/;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_connect_timeout 30s;
+            proxy_send_timeout 30s;
+            proxy_read_timeout 30s;
+        }
+
+        # Health check
+        location /health {
+            proxy_pass http://sentiment_api/health;
+            access_log off;
+        }
+
+        # Documentation
+        location /docs {
+            proxy_pass http://sentiment_api/docs;
+        }
+
+        # Static files (if any)
+        location /static/ {
+            alias /var/www/static/;
+            expires 30d;
+            add_header Cache-Control "public, no-transform";
+        }
+
+        # Default location
+        location / {
+            return 404;
+        }
+    }
+}
+EOF
+    
+    log "✅ Nginx configuration created"
+}
+
+# Setup monitoring configuration
+setup_monitoring() {
+    log "Setting up monitoring configuration..."
+    
+    mkdir -p monitoring/grafana/{provisioning/datasources,provisioning/dashboards,dashboards}
+    
+    # Prometheus configuration
+    cat > monitoring/prometheus.yml << 'EOF'
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files: []
+
+scrape_configs:
+  - job_name: 'sentiment-analyzer'
+    static_configs:
+      - targets: ['sentiment-analyzer:8000']
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:80']
 EOF
 
-    log_success "Environment configuration created"
+    # Grafana datasource
+    cat > monitoring/grafana/provisioning/datasources/prometheus.yml << 'EOF'
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+EOF
+
+    # Grafana dashboard provisioning
+    cat > monitoring/grafana/provisioning/dashboards/dashboard.yml << 'EOF'
+apiVersion: 1
+
+providers:
+  - name: 'default'
+    orgId: 1
+    folder: ''
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards
+EOF
+    
+    log "✅ Monitoring configuration created"
 }
 
-build_images() {
-    log_info "Building Docker images..."
+# Generate SSL certificates (self-signed for demo)
+setup_ssl() {
+    log "Setting up SSL certificates..."
     
-    cd "$PROJECT_ROOT"
-    
-    # Build main application image
-    docker build -t pg-neo-graph-rl:production .
-    
-    if [ $? -eq 0 ]; then
-        log_success "Docker images built successfully"
+    if [ ! -f nginx/ssl/cert.pem ]; then
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+            -keyout nginx/ssl/key.pem \
+            -out nginx/ssl/cert.pem \
+            -subj "/C=US/ST=State/L=City/O=Organization/CN=localhost"
+        
+        log "✅ Self-signed SSL certificates generated"
+        warn "Replace with proper SSL certificates for production use"
     else
-        log_error "Failed to build Docker images"
-        exit 1
+        log "✅ SSL certificates already exist"
     fi
 }
 
+# Build and start services
 deploy_services() {
-    log_info "Deploying services..."
+    log "Building and starting services..."
     
-    cd "$DEPLOYMENT_DIR"
+    # Build images
+    docker-compose -f docker-compose.production.yml build --no-cache
     
-    # Stop any existing services
-    docker-compose -f docker-compose.production.yml down
-    
-    # Deploy production services
+    # Start services
     docker-compose -f docker-compose.production.yml up -d
     
-    if [ $? -eq 0 ]; then
-        log_success "Services deployed successfully"
-    else
-        log_error "Failed to deploy services"
-        exit 1
-    fi
-    
-    # Wait for services to be healthy
-    log_info "Waiting for services to become healthy..."
+    # Wait for services to be ready
+    log "Waiting for services to be ready..."
     sleep 30
     
-    # Check service health
-    check_service_health
-}
-
-check_service_health() {
-    log_info "Checking service health..."
-    
-    SERVICES=("pg-neo-app" "redis" "prometheus" "grafana" "nginx")
-    
-    for service in "${SERVICES[@]}"; do
-        if docker-compose -f docker-compose.production.yml ps | grep -q "$service.*Up"; then
-            log_success "$service is running"
-        else
-            log_error "$service is not running properly"
-        fi
-    done
-}
-
-setup_monitoring() {
-    log_info "Setting up monitoring dashboards..."
-    
-    # Wait for Grafana to be ready
-    timeout=60
-    while [ $timeout -gt 0 ]; do
-        if curl -s http://localhost:3000/api/health > /dev/null 2>&1; then
-            log_success "Grafana is ready"
-            break
-        fi
-        sleep 2
-        ((timeout--))
-    done
-    
-    if [ $timeout -eq 0 ]; then
-        log_warning "Grafana may not be fully ready"
+    # Check health
+    if curl -f http://localhost:8000/health &> /dev/null; then
+        log "✅ API service is healthy"
+    else
+        error "API service health check failed"
     fi
     
-    log_info "Monitoring setup completed"
+    log "✅ Services deployed successfully"
 }
 
-create_backup_script() {
-    log_info "Creating backup script..."
+# Setup log rotation
+setup_log_rotation() {
+    log "Setting up log rotation..."
     
-    cat > "$PROJECT_ROOT/scripts/backup.sh" << 'EOF'
-#!/bin/bash
-
-# Backup script for pg-neo-graph-rl
-BACKUP_DIR="/app/backups"
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-
-echo "Starting backup at $TIMESTAMP"
-
-# Create backup directory
-mkdir -p "$BACKUP_DIR/$TIMESTAMP"
-
-# Backup data
-cp -r /app/data/* "$BACKUP_DIR/$TIMESTAMP/"
-
-# Backup Redis data
-docker exec pg-neo-redis redis-cli BGSAVE
-sleep 5
-docker cp pg-neo-redis:/data/dump.rdb "$BACKUP_DIR/$TIMESTAMP/redis_dump.rdb"
-
-# Backup logs (last 7 days)
-find /app/logs -name "*.log" -mtime -7 -exec cp {} "$BACKUP_DIR/$TIMESTAMP/" \;
-
-# Compress backup
-tar -czf "$BACKUP_DIR/backup_$TIMESTAMP.tar.gz" -C "$BACKUP_DIR" "$TIMESTAMP"
-rm -rf "$BACKUP_DIR/$TIMESTAMP"
-
-echo "Backup completed: backup_$TIMESTAMP.tar.gz"
-
-# Clean old backups (keep last 30 days)
-find "$BACKUP_DIR" -name "backup_*.tar.gz" -mtime +30 -delete
-
-echo "Old backups cleaned"
+    sudo tee /etc/logrotate.d/${PROJECT_NAME} > /dev/null << EOF
+${LOG_DIR}/*.log {
+    daily
+    missingok
+    rotate 30
+    compress
+    delaycompress
+    notifempty
+    create 644 $USER $USER
+    postrotate
+        docker-compose -f ${DEPLOY_DIR}/docker-compose.production.yml restart sentiment-analyzer
+    endscript
+}
 EOF
-
-    chmod +x "$PROJECT_ROOT/scripts/backup.sh"
     
-    log_success "Backup script created"
+    log "✅ Log rotation configured"
 }
 
-setup_monitoring_alerts() {
-    log_info "Setting up monitoring alerts..."
+# Setup systemd service (optional)
+setup_systemd() {
+    log "Setting up systemd service..."
     
-    # This would configure alerting rules
-    # For now, we'll just create a placeholder
-    
-    cat > "$PROJECT_ROOT/alerts/rules.yml" << 'EOF'
-groups:
-  - name: pg-neo-graph-rl
-    rules:
-      - alert: HighMemoryUsage
-        expr: memory_usage_percent > 85
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High memory usage detected"
-          description: "Memory usage is above 85% for more than 5 minutes"
-      
-      - alert: SlowTraining
-        expr: avg_training_time > 30
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Training performance degraded"
-          description: "Average training time is above 30 seconds"
+    sudo tee /etc/systemd/system/${PROJECT_NAME}.service > /dev/null << EOF
+[Unit]
+Description=Sentiment Analyzer Pro
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=${DEPLOY_DIR}
+ExecStart=/usr/local/bin/docker-compose -f docker-compose.production.yml up -d
+ExecStop=/usr/local/bin/docker-compose -f docker-compose.production.yml down
+TimeoutStartSec=0
+User=$USER
+Group=$USER
+
+[Install]
+WantedBy=multi-user.target
 EOF
-
-    log_success "Monitoring alerts configured"
+    
+    sudo systemctl daemon-reload
+    sudo systemctl enable ${PROJECT_NAME}
+    
+    log "✅ Systemd service configured"
 }
 
-print_deployment_info() {
-    log_info "Deployment completed successfully!"
-    echo ""
-    echo "🌍 Access URLs:"
-    echo "  • Main Application: http://localhost:8080"
-    echo "  • Grafana Dashboard: http://localhost:3000 (admin/pg_neo_admin_2025)"
-    echo "  • Prometheus: http://localhost:9090" 
-    echo "  • Redis: localhost:6379"
-    echo ""
+# Display deployment information
+show_deployment_info() {
+    log "Deployment completed successfully! 🎉"
+    echo
+    echo "==============================================================="
+    echo "🚀 Sentiment Analyzer Pro is now running in production mode"
+    echo "==============================================================="
+    echo
+    echo "📡 API Endpoints:"
+    echo "  • Health Check: https://localhost/health"
+    echo "  • API Documentation: https://localhost/docs"
+    echo "  • Sentiment Analysis: https://localhost/api/analyze"
+    echo
+    echo "📊 Monitoring:"
+    echo "  • Grafana Dashboard: http://localhost:3000 (admin/admin)"
+    echo "  • Prometheus: http://localhost:9090"
+    echo
+    echo "🔧 Management:"
+    echo "  • View logs: docker-compose -f docker-compose.production.yml logs -f"
+    echo "  • Stop services: docker-compose -f docker-compose.production.yml down"
+    echo "  • Restart services: docker-compose -f docker-compose.production.yml restart"
+    echo
     echo "📁 Important Directories:"
-    echo "  • Data: $DATA_DIR"
-    echo "  • Logs: $LOGS_DIR"
-    echo "  • Backups: $BACKUP_DIR"
-    echo ""
-    echo "🔧 Management Commands:"
-    echo "  • View logs: docker-compose -f deployment/docker-compose.production.yml logs -f"
-    echo "  • Restart services: docker-compose -f deployment/docker-compose.production.yml restart"
-    echo "  • Stop services: docker-compose -f deployment/docker-compose.production.yml down"
-    echo "  • Backup data: ./scripts/backup.sh"
-    echo ""
-    echo "📊 Monitor system health through Grafana dashboard"
-    echo "🔔 Check alerts in AlertManager: http://localhost:9093"
-    echo ""
-    log_success "pg-neo-graph-rl is ready for production use!"
+    echo "  • Application: ${DEPLOY_DIR}"
+    echo "  • Logs: ${LOG_DIR}"
+    echo "  • Configuration: ${CONFIG_DIR}"
+    echo
+    echo "⚠️  Security Notes:"
+    echo "  • Replace self-signed SSL certificates with proper ones"
+    echo "  • Change default Grafana password"
+    echo "  • Review and adjust rate limiting settings"
+    echo "  • Configure firewall rules"
+    echo
+    echo "==============================================================="
 }
 
 # Main execution
 main() {
-    log_info "Starting production deployment process..."
+    log "Starting production deployment..."
     
     check_requirements
-    create_directories
-    setup_ssl
-    setup_environment
-    build_images
-    deploy_services
+    setup_directories
+    setup_application
+    setup_nginx
     setup_monitoring
-    create_backup_script
-    setup_monitoring_alerts
-    print_deployment_info
+    setup_ssl
+    deploy_services
+    setup_log_rotation
+    setup_systemd
     
-    log_success "Production deployment completed successfully!"
+    show_deployment_info
 }
 
 # Run main function

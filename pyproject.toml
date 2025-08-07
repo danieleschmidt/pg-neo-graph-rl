@@ -3,16 +3,16 @@ requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
-name = "pg-neo-graph-rl"
+name = "sentiment-analyzer-pro"
 dynamic = ["version"]
-description = "Federated Graph-Neural Reinforcement Learning toolkit for city-scale traffic, power-grid, or swarm control"
+description = "Enterprise-grade sentiment analysis toolkit with advanced ML models, federated learning, and production deployment"
 readme = "README.md"
 license = "MIT"
 authors = [
     { name = "Daniel Schmidt" },
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
@@ -21,27 +21,33 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Text Processing :: Linguistic",
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 requires-python = ">=3.9"
 dependencies = [
-    "jax[cpu]>=0.4.0",
-    "flax>=0.7.0",
-    "optax>=0.1.4",
+    "torch>=2.0.0",
+    "transformers>=4.30.0",
+    "tokenizers>=0.13.0",
     "numpy>=1.21.0",
-    "networkx>=2.8.0",
-    "gymnasium>=0.28.0",
-    "matplotlib>=3.5.0",
+    "pandas>=1.5.0",
+    "scikit-learn>=1.3.0",
+    "fastapi>=0.100.0",
+    "uvicorn[standard]>=0.22.0",
     "pydantic>=2.0.0",
+    "aiofiles>=23.0.0",
+    "httpx>=0.24.0",
     "rich>=13.0.0",
+    "click>=8.1.0",
+    "psutil>=5.9.0",
 ]
 
 [project.optional-dependencies]
 gpu = [
-    "jax[cuda12_pip]>=0.4.0",
+    "torch>=2.0.0+cu118",
 ]
 cpu = [
-    "jax[cpu]>=0.4.0",
+    "torch>=2.0.0+cpu",
 ]
 dev = [
     "pytest>=7.0",
@@ -49,6 +55,7 @@ dev = [
     "pytest-xdist>=3.0",
     "pytest-mock>=3.10",
     "pytest-benchmark>=4.0",
+    "pytest-asyncio>=0.21.0",
     "black>=23.0",
     "ruff>=0.1.0",
     "mypy>=1.0",
@@ -72,22 +79,37 @@ benchmarks = [
     "pandas>=1.5.0",
     "seaborn>=0.11.0",
     "jupyter>=1.0.0",
+    "matplotlib>=3.5.0",
+]
+interpretability = [
+    "shap>=0.42.0",
+    "lime>=0.2.0",
+    "captum>=0.6.0",
+]
+streaming = [
+    "kafka-python>=2.0.2",
+    "redis>=4.5.0",
+    "aioredis>=2.0.0",
+]
+multilingual = [
+    "langdetect>=1.0.9",
+    "polyglot>=16.7.4",
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/pg-neo-graph-rl"
-Documentation = "https://pg-neo-graph-rl.readthedocs.io"
-Repository = "https://github.com/yourusername/pg-neo-graph-rl"
-Issues = "https://github.com/yourusername/pg-neo-graph-rl/issues"
-Changelog = "https://github.com/yourusername/pg-neo-graph-rl/blob/main/CHANGELOG.md"
-Discussions = "https://github.com/yourusername/pg-neo-graph-rl/discussions"
+Homepage = "https://github.com/yourusername/sentiment-analyzer-pro"
+Documentation = "https://sentiment-analyzer-pro.readthedocs.io"
+Repository = "https://github.com/yourusername/sentiment-analyzer-pro"
+Issues = "https://github.com/yourusername/sentiment-analyzer-pro/issues"
+Changelog = "https://github.com/yourusername/sentiment-analyzer-pro/blob/main/CHANGELOG.md"
+Discussions = "https://github.com/yourusername/sentiment-analyzer-pro/discussions"
 
 [project.scripts]
-pg-neo-rl = "pg_neo_graph_rl.cli:main"
-pgnrl-train = "pg_neo_graph_rl.training.cli:train"
-pgnrl-eval = "pg_neo_graph_rl.evaluation.cli:evaluate"
-pgnrl-dashboard = "scripts.monitoring_dashboard:main"
-pgnrl-metrics = "scripts.metrics_collector:main"
+sentiment-analyzer = "sentiment_analyzer_pro.cli:main"
+sap-train = "sentiment_analyzer_pro.training.cli:train"
+sap-eval = "sentiment_analyzer_pro.evaluation.cli:evaluate"
+sap-api = "sentiment_analyzer_pro.api:start_server"
+sap-dashboard = "scripts.monitoring_dashboard:main"
 
 [tool.hatch.version]
 source = "vcs"
