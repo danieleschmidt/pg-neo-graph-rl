@@ -1,5 +1,4 @@
-# Sentiment Analyzer Pro - Production Dockerfile
-
+# Multi-stage build for pg-neo-graph-rl
 FROM python:3.9-slim as base
 
 # Set environment variables
@@ -21,6 +20,11 @@ RUN useradd --create-home --shell /bin/bash app
 
 # Development stage
 FROM base as development
+
+# Install development dependencies
+RUN apt-get update && apt-get install -y \
+    graphviz \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 USER app
@@ -45,27 +49,20 @@ USER app
 
 # Copy only necessary files
 COPY --chown=app:app pyproject.toml README.md LICENSE ./
-COPY --chown=app:app sentiment_analyzer_pro/ ./sentiment_analyzer_pro/
-COPY --chown=app:app requirements.txt ./
+COPY --chown=app:app pg_neo_graph_rl/ ./pg_neo_graph_rl/
 
-# Install production dependencies
-RUN pip install -r requirements.txt && pip install -e .
-
-# Create necessary directories
-RUN mkdir -p /app/models /app/logs /app/cache
+# Install production dependencies only
+RUN pip install -e .
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD python -c "import pg_neo_graph_rl; print('OK')" || exit 1
 
-# Expose port
-EXPOSE 8000
-
-# Default command - API server
-CMD ["uvicorn", "sentiment_analyzer_pro.api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+# Default command
+CMD ["python", "-c", "import pg_neo_graph_rl; print('pg-neo-graph-rl ready')"]
 
 # GPU-enabled stage
-FROM nvidia/cuda:11.8-runtime-ubuntu20.04 as gpu
+FROM nvidia/cuda:11.8-devel-ubuntu20.04 as gpu
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -93,19 +90,13 @@ USER app
 
 # Copy and install package
 COPY --chown=app:app pyproject.toml README.md LICENSE ./
-COPY --chown=app:app sentiment_analyzer_pro/ ./sentiment_analyzer_pro/
-COPY --chown=app:app requirements.txt ./
+COPY --chown=app:app pg_neo_graph_rl/ ./pg_neo_graph_rl/
 
 # Install with GPU support
-RUN pip install -r requirements.txt && pip install -e ".[gpu]"
-
-# Create directories
-RUN mkdir -p /app/models /app/logs /app/cache
+RUN pip install -e ".[gpu]"
 
 # Health check for GPU
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+HEALTHCHECK --interval=30s --timeout=30s --start-period=10s --retries=3 \
+    CMD python -c "import jax; print(f'JAX devices: {jax.devices()}'); assert len(jax.devices()) > 0" || exit 1
 
-EXPOSE 8000
-
-CMD ["uvicorn", "sentiment_analyzer_pro.api:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+CMD ["python", "-c", "import jax; print(f'JAX devices: {jax.devices()}')"]
