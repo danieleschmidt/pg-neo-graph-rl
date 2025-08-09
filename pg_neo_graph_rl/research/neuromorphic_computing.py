@@ -20,7 +20,7 @@ import jax.numpy as jnp
 from typing import Dict, List, Tuple, Optional, Any, NamedTuple
 from dataclasses import dataclass
 import numpy as np
-from ..core.federated import GraphState
+from ..core.types import GraphState
 
 
 class SpikeEvent(NamedTuple):

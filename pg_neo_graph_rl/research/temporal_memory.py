@@ -22,7 +22,7 @@ from flax import linen as nn
 import optax
 from dataclasses import dataclass
 import numpy as np
-from ..core.federated import GraphState
+from ..core.types import GraphState
 
 
 class TemporalMemoryState(NamedTuple):

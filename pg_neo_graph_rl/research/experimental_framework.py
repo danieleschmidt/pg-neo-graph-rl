@@ -28,7 +28,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from scipy import stats
 import pandas as pd
-from ..core.federated import GraphState, FederatedGraphRL
+from ..core.types import GraphState, FederatedGraphRL
 from ..environments.traffic import TrafficEnvironment
 from ..environments.power_grid import PowerGridEnvironment  
 from ..environments.swarm import SwarmEnvironment
