@@ -8,7 +8,7 @@ import optax
 from typing import Dict, Tuple, Any, Optional
 from dataclasses import dataclass
 
-from ..core.federated import GraphState
+from ..core.types import GraphState
 from ..networks.graph_networks import GraphEncoder
 
 
@@ -65,7 +65,7 @@ class GraphPolicyNetwork(nn.Module):
             embeddings = nn.Dense(hidden_dim)(embeddings)
             embeddings = jax.nn.relu(embeddings)
             if training:
-                embeddings = nn.Dropout(0.1)(embeddings)
+                embeddings = nn.Dropout(0.1, deterministic=not training)(embeddings)
         
         # Output action logits
         action_logits = nn.Dense(self.action_dim)(embeddings)
@@ -113,7 +113,7 @@ class GraphValueNetwork(nn.Module):
             embeddings = nn.Dense(hidden_dim)(embeddings)
             embeddings = jax.nn.relu(embeddings)
             if training:
-                embeddings = nn.Dropout(0.1)(embeddings)
+                embeddings = nn.Dropout(0.1, deterministic=not training)(embeddings)
         
         # Output state values
         values = nn.Dense(1)(embeddings)
@@ -193,12 +193,14 @@ class GraphPPO:
             info: Additional information (log_probs, values, etc.)
         """
         # Get action logits from policy network
+        key, self.rng_key = jax.random.split(self.rng_key)
         action_logits = self.policy_network.apply(
             self.policy_params,
             graph_state.nodes,
             graph_state.edges,
             graph_state.adjacency,
-            training=training
+            training=training,
+            rngs={'dropout': key} if training else {}
         )
         
         # Sample actions
@@ -210,12 +212,14 @@ class GraphPPO:
         action_log_probs = log_probs[jnp.arange(len(actions)), actions]
         
         # Get state values
+        key, self.rng_key = jax.random.split(self.rng_key)
         values = self.value_network.apply(
             self.value_params,
             graph_state.nodes,
             graph_state.edges, 
             graph_state.adjacency,
-            training=training
+            training=training,
+            rngs={'dropout': key} if training else {}
         )
         
         info = {
@@ -285,25 +289,39 @@ class GraphPPO:
             info: Loss breakdown
         """
         # Get current action logits and values
+        key = jax.random.PRNGKey(0)  # Use fixed key for loss computation
         action_logits = self.policy_network.apply(
             params['policy'],
             graph_states.nodes,
             graph_states.edges,
             graph_states.adjacency,
-            training=True
+            training=True,
+            rngs={'dropout': key}
         )
         
+        key2 = jax.random.PRNGKey(1)  # Use different fixed key  
         values = self.value_network.apply(
             params['value'],
             graph_states.nodes,
             graph_states.edges,
             graph_states.adjacency,
-            training=True
+            training=True,
+            rngs={'dropout': key2}
         )
         
         # Compute new log probabilities
         log_probs = jax.nn.log_softmax(action_logits)
-        new_log_probs = log_probs[jnp.arange(len(actions)), actions]
+        
+        # Handle batch dimension - flatten if needed
+        if actions.ndim == 2:  # [batch_size, num_nodes]
+            batch_size, num_nodes = actions.shape
+            flat_actions = actions.flatten()
+            node_indices = jnp.tile(jnp.arange(num_nodes), batch_size)
+            batch_indices = jnp.repeat(jnp.arange(batch_size), num_nodes)
+            new_log_probs = log_probs[batch_indices, node_indices, flat_actions]
+            new_log_probs = new_log_probs.reshape(batch_size, num_nodes)
+        else:  # [num_nodes] single timestep
+            new_log_probs = log_probs[jnp.arange(len(actions)), actions]
         
         # Compute probability ratio
         ratio = jnp.exp(new_log_probs - old_log_probs)
@@ -381,8 +399,10 @@ class GraphPPO:
         
         # Update value network
         def value_loss_fn(params):
+            key = jax.random.PRNGKey(2)
             values_pred = self.value_network.apply(
-                params, graph_states.nodes, graph_states.edges, graph_states.adjacency, training=True
+                params, graph_states.nodes, graph_states.edges, graph_states.adjacency, 
+                training=True, rngs={'dropout': key}
             )
             return jnp.mean((values_pred - returns) ** 2)
         

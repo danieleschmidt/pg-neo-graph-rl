@@ -8,7 +8,7 @@ import optax
 from typing import Dict, Tuple, Any, Optional
 from dataclasses import dataclass
 
-from ..core.federated import GraphState
+from ..core.types import GraphState
 from ..networks.graph_networks import GraphEncoder
 
 

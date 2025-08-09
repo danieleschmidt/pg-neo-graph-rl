@@ -11,7 +11,7 @@ import jax
 import jax.numpy as jnp
 
 from ..utils.logging import get_logger, get_performance_logger
-from ..core.federated import GraphState
+from ..core.types import GraphState
 
 
 @dataclass 

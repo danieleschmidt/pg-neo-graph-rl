@@ -5,7 +5,7 @@ import jax
 import jax.numpy as jnp
 import networkx as nx
 from typing import Dict, Tuple, Any, Optional
-from ..core.federated import GraphState
+from ..core.types import GraphState
 
 
 class SwarmEnvironment:

@@ -72,11 +72,11 @@ class GraphConvNetwork(nn.Module):
         x = nodes
         
         # Apply graph convolution layers
-        for hidden_dim in self.hidden_dims:
-            weight = self.param('conv_weight', 
+        for i, hidden_dim in enumerate(self.hidden_dims):
+            weight = self.param(f'conv_weight_{i}', 
                               nn.initializers.xavier_uniform(),
                               (x.shape[-1], hidden_dim))
-            bias = self.param('conv_bias',
+            bias = self.param(f'conv_bias_{i}',
                             nn.initializers.zeros,
                             (hidden_dim,))
             
@@ -145,7 +145,7 @@ class GraphAttentionNetwork(nn.Module):
             
             # Apply dropout during training
             if training:
-                attention_weights = nn.Dropout(self.dropout_rate)(attention_weights)
+                attention_weights = nn.Dropout(self.dropout_rate, deterministic=not training)(attention_weights)
             
             # Apply attention to values
             attended = jnp.dot(attention_weights, value)
@@ -166,7 +166,7 @@ class GraphAttentionNetwork(nn.Module):
         ff_output = nn.Dense(self.hidden_dim)(ff_output)
         
         if training:
-            ff_output = nn.Dropout(self.dropout_rate)(ff_output)
+            ff_output = nn.Dropout(self.dropout_rate, deterministic=not training)(ff_output)
         
         # Another residual connection and layer norm
         if ff_output.shape[-1] == multi_head_output.shape[-1]:

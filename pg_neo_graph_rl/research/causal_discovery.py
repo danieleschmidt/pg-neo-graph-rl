@@ -23,7 +23,7 @@ from dataclasses import dataclass
 import numpy as np
 import networkx as nx
 from scipy import stats
-from ..core.federated import GraphState
+from ..core.types import GraphState
 
 
 class CausalEdge(NamedTuple):

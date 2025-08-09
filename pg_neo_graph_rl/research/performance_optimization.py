@@ -26,7 +26,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import partial
 import gc
-from ..core.federated import GraphState, FederatedGraphRL
+from ..core.types import GraphState, FederatedGraphRL
 
 
 class PerformanceMetrics(NamedTuple):

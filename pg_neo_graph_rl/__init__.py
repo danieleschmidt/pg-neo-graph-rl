@@ -9,11 +9,13 @@ __version__ = "0.1.0"
 __author__ = "Daniel Schmidt"
 
 from .core import FederatedGraphRL
+from .core.types import GraphState
 from .algorithms import GraphPPO, GraphSAC
 from .environments import TrafficEnvironment, PowerGridEnvironment, SwarmEnvironment
 
 __all__ = [
     "FederatedGraphRL",
+    "GraphState",
     "GraphPPO", 
     "GraphSAC",
     "TrafficEnvironment",

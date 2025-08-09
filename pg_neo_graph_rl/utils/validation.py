@@ -3,7 +3,7 @@ Input validation utilities for pg-neo-graph-rl.
 """
 import jax.numpy as jnp
 from typing import Any, Dict, List, Optional, Union
-from ..core.federated import GraphState
+from ..core.types import GraphState
 from .exceptions import ValidationError
 
 
