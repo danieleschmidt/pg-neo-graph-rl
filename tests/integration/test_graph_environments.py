@@ -1,6 +1,7 @@
 """Integration tests for graph environments."""
 
 import pytest
+import jax
 import jax.numpy as jnp
 import networkx as nx
 from unittest.mock import Mock, patch
@@ -18,8 +19,8 @@ class TestGraphEnvironmentIntegration:
         
         # Mock traffic flow data
         flow_data = {
-            node: {"flow": jnp.random.uniform(0, 100), 
-                  "density": jnp.random.uniform(0, 1)}
+            node: {"flow": float(jax.random.uniform(jax.random.PRNGKey(hash(node) % 2**32), (), minval=0, maxval=100)), 
+                  "density": float(jax.random.uniform(jax.random.PRNGKey((hash(node)+1) % 2**32), (), minval=0, maxval=1))}
             for node in graph.nodes()
         }
         
@@ -39,14 +40,14 @@ class TestGraphEnvironmentIntegration:
         
         # Mock power grid attributes
         power_data = {
-            node: {"voltage": jnp.random.uniform(0.95, 1.05),
-                  "power_gen": jnp.random.uniform(0, 100)}
+            node: {"voltage": float(jax.random.uniform(jax.random.PRNGKey(hash(node) % 2**32), (), minval=0.95, maxval=1.05)),
+                  "power_gen": float(jax.random.uniform(jax.random.PRNGKey((hash(node)+1) % 2**32), (), minval=0, maxval=100))}
             for node in grid.nodes()
         }
         
         edge_data = {
-            edge: {"impedance": jnp.random.uniform(0.1, 2.0),
-                  "capacity": jnp.random.uniform(50, 200)}
+            edge: {"impedance": float(jax.random.uniform(jax.random.PRNGKey(hash(edge) % 2**32), (), minval=0.1, maxval=2.0)),
+                  "capacity": float(jax.random.uniform(jax.random.PRNGKey((hash(edge)+1) % 2**32), (), minval=50, maxval=200))}
             for edge in grid.edges()
         }
         
@@ -64,8 +65,8 @@ class TestGraphEnvironmentIntegration:
         num_drones = 50
         
         # Mock drone positions
-        positions = jnp.random.uniform(-100, 100, (num_drones, 2))
-        velocities = jnp.random.uniform(-5, 5, (num_drones, 2))
+        positions = jax.random.uniform(jax.random.PRNGKey(42), (num_drones, 2), minval=-100, maxval=100)
+        velocities = jax.random.uniform(jax.random.PRNGKey(43), (num_drones, 2), minval=-5, maxval=5)
         
         # Test proximity graph construction
         communication_range = 25.0
@@ -103,13 +104,14 @@ class TestGraphEnvironmentIntegration:
         for t in range(num_timesteps):
             # Mock edge additions/removals
             for edge in list(graph.edges()):
-                if jnp.random.random() < edge_change_prob:
+                if float(jax.random.uniform(jax.random.PRNGKey(hash((t, edge)) % 2**32), ())) < edge_change_prob:
                     graph.remove_edge(*edge)
             
             # Add new random edges
             nodes = list(graph.nodes())
             for _ in range(2):
-                u, v = jnp.random.choice(nodes, 2, replace=False)
+                indices = jax.random.choice(jax.random.PRNGKey(hash((t, _)) % 2**32), len(nodes), (2,), replace=False)
+                u, v = nodes[int(indices[0])], nodes[int(indices[1])]
                 if not graph.has_edge(u, v):
                     graph.add_edge(u, v)
         

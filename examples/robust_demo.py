@@ -123,7 +123,7 @@ def main():
             dummy_grad = {}
             for param_name in ["policy", "value"]:
                 # Create small gradients to pass security checks
-                dummy_grad[param_name] = jax.tree_map(
+                dummy_grad[param_name] = jax.tree.map(
                     lambda x: jax.random.normal(jax.random.PRNGKey(42), x.shape) * 0.01,
                     getattr(agent, f"{param_name}_params")
                 )

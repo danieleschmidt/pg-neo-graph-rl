@@ -22,8 +22,8 @@ class TestPerformanceBenchmarks:
             graph = nx.erdos_renyi_graph(size, 0.1)
             
             # Mock node features
-            node_features = jnp.random.normal(
-                key=jax.random.PRNGKey(42), 
+            node_features = jax.random.normal(
+                jax.random.PRNGKey(42), 
                 shape=(size, 64)
             )
             
@@ -54,7 +54,7 @@ class TestPerformanceBenchmarks:
         for num_agents in num_agents_list:
             # Create mock gradients
             gradients = [
-                jnp.random.normal(
+                jax.random.normal(
                     key=jax.random.PRNGKey(i), 
                     shape=gradient_dim
                 )
@@ -88,7 +88,7 @@ class TestPerformanceBenchmarks:
         for batch_size in batch_sizes:
             for seq_len in sequence_lengths:
                 # Create mock data
-                data = jnp.random.normal(
+                data = jax.random.normal(
                     key=jax.random.PRNGKey(42),
                     shape=(batch_size, seq_len, 64)
                 )
@@ -144,11 +144,11 @@ class TestPerformanceBenchmarks:
         sizes = [50, 100, 200]
         
         for size in sizes:
-            nodes = jnp.random.normal(
+            nodes = jax.random.normal(
                 key=jax.random.PRNGKey(42),
                 shape=(size, 32)
             )
-            edges = jnp.random.randint(
+            edges = jax.random.randint(
                 key=jax.random.PRNGKey(43),
                 minval=0, maxval=size,
                 shape=(size * 2, 2)
@@ -184,7 +184,7 @@ class TestPerformanceBenchmarks:
             return jnp.sum(batch, axis=1)
         
         for batch_size in batch_sizes:
-            batch = jnp.random.normal(
+            batch = jax.random.normal(
                 key=jax.random.PRNGKey(42),
                 shape=(batch_size,) + single_item_shape
             )

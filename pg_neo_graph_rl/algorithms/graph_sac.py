@@ -133,9 +133,9 @@ class GraphSAC:
         """Compute SAC gradients."""
         # Simplified gradient computation
         dummy_grads = {
-            'actor': jax.tree_map(lambda x: jnp.zeros_like(x), self.actor_params),
-            'critic1': jax.tree_map(lambda x: jnp.zeros_like(x), self.critic1_params),
-            'critic2': jax.tree_map(lambda x: jnp.zeros_like(x), self.critic2_params)
+            'actor': jax.tree.map(lambda x: jnp.zeros_like(x), self.actor_params),
+            'critic1': jax.tree.map(lambda x: jnp.zeros_like(x), self.critic1_params),
+            'critic2': jax.tree.map(lambda x: jnp.zeros_like(x), self.critic2_params)
         }
         return dummy_grads
     
