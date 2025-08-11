@@ -1,6 +1,7 @@
 """Integration tests for federated learning components."""
 
 import pytest
+import jax
 import jax.numpy as jnp
 import networkx as nx
 from unittest.mock import Mock, patch
@@ -79,7 +80,7 @@ class TestFederatedLearningIntegration:
         gradients = jnp.ones((10, 5))
         
         # Add noise for privacy
-        noise = jnp.random.normal(key=jax.random.PRNGKey(42), 
+        noise = jax.random.normal(key=jax.random.PRNGKey(42), 
                                 shape=gradients.shape) * noise_scale
         private_gradients = gradients + noise
         

@@ -11,7 +11,7 @@ from pg_neo_graph_rl import FederatedGraphRL, TrafficEnvironment
 from pg_neo_graph_rl.algorithms import GraphPPO
 from pg_neo_graph_rl.algorithms.graph_ppo import PPOConfig
 from pg_neo_graph_rl.optimization.performance import ConcurrentTrainer, BatchProcessor, PerformanceOptimizer
-from pg_neo_graph_rl.optimization.cache import GraphCache, AdaptiveCache, ParameterCache
+from pg_neo_graph_rl.optimization.advanced_cache import get_global_cache, get_graph_cache, SmartCache
 from pg_neo_graph_rl.utils.health import create_health_monitor
 from pg_neo_graph_rl.utils.logging import get_logger, get_performance_logger
 
@@ -55,9 +55,11 @@ def main():
     
     # Initialize caching systems
     print("💾 Setting up caching systems...")
-    graph_cache = GraphCache(max_size=5000, ttl_seconds=600.0)
-    param_cache = ParameterCache(max_memory_mb=256)
-    adaptive_cache = AdaptiveCache(initial_size=200)
+    smart_cache = get_global_cache()
+    graph_cache = get_graph_cache()
+    
+    # Warm up caches
+    smart_cache.warm_cache()
     
     print("✅ Cache systems initialized")
     print()
@@ -121,8 +123,8 @@ def main():
                 agents.append(agent)
                 
                 # Cache initial parameters
-                param_cache.cache_parameters(i, agent.policy_params)
-                param_cache.cache_parameters(i, agent.value_params)
+                smart_cache.put(f"agent_{i}_policy_params", agent.policy_params)
+                smart_cache.put(f"agent_{i}_value_params", agent.value_params)
         
         print(f"✅ Created and cached {len(agents)} agents")
         print()
@@ -197,7 +199,6 @@ def main():
         # Demonstrate caching performance
         print("💾 Demonstrating caching performance...")
         
-        @graph_cache.cached_computation
         def expensive_computation(matrix, iterations):
             """Simulate expensive graph computation."""
             result = matrix
@@ -212,18 +213,20 @@ def main():
         
         # First calls (cache misses)
         for i in range(10):
-            result = expensive_computation(test_matrix, 5)
+            cache_key = f"expensive_comp_{hash(str(test_matrix.shape))}_{5}"
+            result = smart_cache.get(cache_key, lambda: expensive_computation(test_matrix, 5))
         
         first_time = time.time() - cache_test_start
         
         # Second calls (cache hits)
         cache_hit_start = time.time()
         for i in range(10):
-            result = expensive_computation(test_matrix, 5)
+            cache_key = f"expensive_comp_{hash(str(test_matrix.shape))}_{5}"
+            result = smart_cache.get(cache_key, lambda: expensive_computation(test_matrix, 5))
         
         second_time = time.time() - cache_hit_start
         
-        cache_stats = graph_cache.get_stats()
+        cache_stats = smart_cache.get_analytics()
         print(f"✅ Caching performance test:")
         print(f"   First run (cache misses): {first_time:.3f}s")
         print(f"   Second run (cache hits): {second_time:.3f}s")
@@ -240,19 +243,19 @@ def main():
         for i in range(1000):
             key = f"key_{i % 100}"  # Create repeated access pattern
             
-            cached_value = adaptive_cache.get(key)
+            cached_value = smart_cache.get(key)
             if cached_value is None:
                 # Simulate computation
                 value = f"computed_value_{i}"
-                adaptive_cache.put(key, value)
+                smart_cache.put(key, value)
         
         adaptive_time = time.time() - adaptive_start
-        adaptation_stats = adaptive_cache.get_adaptation_stats()
+        adaptation_stats = smart_cache.get_analytics()
         
         print(f"✅ Adaptive caching test:")
         print(f"   Processing time: {adaptive_time:.3f}s")
-        print(f"   Cache hit rate: {adaptation_stats['cache_stats']['hit_rate']:.2%}")
-        print(f"   Cache size adapted to: {adaptation_stats['cache_stats']['max_size']}")
+        print(f"   Cache hit rate: {adaptation_stats['hit_rate']:.2%}")
+        print(f"   Cache size: {adaptation_stats['current_size']}")
         print()
         
         # Demonstrate performance optimization
@@ -294,7 +297,7 @@ def main():
         for agent in agents:
             agent_grad = {}
             for param_name in ["policy", "value"]:
-                agent_grad[param_name] = jax.tree_map(
+                agent_grad[param_name] = jax.tree.map(
                     lambda x: jax.random.normal(jax.random.PRNGKey(42), x.shape) * 0.001,
                     getattr(agent, f"{param_name}_params")
                 )

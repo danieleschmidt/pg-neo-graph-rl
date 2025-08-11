@@ -2,8 +2,11 @@
 Health checking and system monitoring utilities.
 """
 import time
-import psutil
 import threading
+try:
+    import psutil
+except ImportError:
+    psutil = None
 from typing import Dict, Any, List, Optional, Callable
 from dataclasses import dataclass, field
 from enum import Enum
@@ -213,6 +216,9 @@ class SystemHealthMonitor:
     
     def _check_cpu_usage(self) -> Dict[str, Any]:
         """Check CPU usage."""
+        if psutil is None:
+            return {"error": "psutil not available", "usage": 0.0}
+        
         cpu_percent = psutil.cpu_percent(interval=1.0)
         cpu_count = psutil.cpu_count()
         
@@ -224,6 +230,9 @@ class SystemHealthMonitor:
     
     def _check_memory_usage(self) -> Dict[str, Any]:
         """Check memory usage."""
+        if psutil is None:
+            return {"error": "psutil not available", "usage": 0.0}
+        
         memory = psutil.virtual_memory()
         
         return {
@@ -235,6 +244,9 @@ class SystemHealthMonitor:
     
     def _check_disk_usage(self) -> Dict[str, Any]:
         """Check disk usage."""
+        if psutil is None:
+            return {"error": "psutil not available", "usage": 0.0}
+        
         disk = psutil.disk_usage('/')
         
         return {
