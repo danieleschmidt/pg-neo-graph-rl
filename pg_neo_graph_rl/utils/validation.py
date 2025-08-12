@@ -1,10 +1,12 @@
 """
 Input validation utilities for pg-neo-graph-rl.
 """
+import re
 import jax.numpy as jnp
 from typing import Any, Dict, List, Optional, Union
 from ..core.types import GraphState
-from .exceptions import ValidationError
+from .exceptions import ValidationError, SecurityError
+from .security import SecurityValidator
 
 
 def validate_graph_state(state: GraphState) -> None:
@@ -344,4 +346,96 @@ def validate_numeric_range(value: Union[int, float],
         raise ValidationError(
             f"{name} must be <= {max_val}, got {value}",
             field_name=name
+        )
+
+
+def validate_file_path(file_path: str, 
+                      allowed_extensions: Optional[List[str]] = None,
+                      max_length: int = 4096) -> None:
+    """
+    Validate file path for security and correctness.
+    
+    Args:
+        file_path: File path to validate
+        allowed_extensions: List of allowed file extensions
+        max_length: Maximum path length
+        
+    Raises:
+        ValidationError: If path is invalid
+        SecurityError: If path poses security risk
+    """
+    if not isinstance(file_path, str):
+        raise ValidationError("File path must be string", field_name="file_path")
+    
+    if len(file_path) > max_length:
+        raise ValidationError(
+            f"File path too long (>{max_length} chars)",
+            field_name="file_path"
+        )
+    
+    # Security checks
+    SecurityValidator.validate_file_path(file_path)
+    
+    # Extension validation
+    if allowed_extensions:
+        extension = file_path.lower().split('.')[-1] if '.' in file_path else ''
+        if extension not in [ext.lower().lstrip('.') for ext in allowed_extensions]:
+            raise ValidationError(
+                f"File extension '{extension}' not allowed. Allowed: {allowed_extensions}",
+                field_name="file_path"
+            )
+
+
+def validate_string_input(text: str,
+                         field_name: str = "input",
+                         min_length: int = 0,
+                         max_length: int = 10000,
+                         allow_special_chars: bool = True,
+                         pattern: Optional[str] = None) -> None:
+    """
+    Validate string input with security checks.
+    
+    Args:
+        text: Text to validate
+        field_name: Field name for error messages
+        min_length: Minimum text length
+        max_length: Maximum text length
+        allow_special_chars: Whether to allow special characters
+        pattern: Regex pattern that text must match
+        
+    Raises:
+        ValidationError: If validation fails
+        SecurityError: If input poses security risk
+    """
+    if not isinstance(text, str):
+        raise ValidationError(f"{field_name} must be string", field_name=field_name)
+    
+    if len(text) < min_length:
+        raise ValidationError(
+            f"{field_name} too short (min {min_length} chars)",
+            field_name=field_name
+        )
+    
+    if len(text) > max_length:
+        raise ValidationError(
+            f"{field_name} too long (max {max_length} chars)",
+            field_name=field_name
+        )
+    
+    # Security validation
+    SecurityValidator.validate_string_input(text, field_name)
+    
+    # Special character check
+    if not allow_special_chars:
+        if not text.replace(' ', '').replace('-', '').replace('_', '').isalnum():
+            raise ValidationError(
+                f"{field_name} contains disallowed special characters",
+                field_name=field_name
+            )
+    
+    # Pattern matching
+    if pattern and not re.match(pattern, text):
+        raise ValidationError(
+            f"{field_name} does not match required pattern",
+            field_name=field_name
         )

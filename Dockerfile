@@ -1,102 +1,150 @@
-# Multi-stage build for pg-neo-graph-rl
-FROM python:3.9-slim as base
+# Multi-stage production Dockerfile for pg-neo-graph-rl
+# Optimized for federated graph reinforcement learning workloads
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PYTHONHASHSEED=random \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+# Build stage
+FROM python:3.11-slim as builder
 
-# Install system dependencies
+# Install system dependencies for building
 RUN apt-get update && apt-get install -y \
     build-essential \
     git \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
-RUN useradd --create-home --shell /bin/bash app
-
-# Development stage
-FROM base as development
-
-# Install development dependencies
-RUN apt-get update && apt-get install -y \
-    graphviz \
-    && rm -rf /var/lib/apt/lists/*
-
+# Set working directory
 WORKDIR /app
-USER app
 
-# Copy requirements first for better caching
-COPY --chown=app:app pyproject.toml ./
-RUN pip install -e ".[dev,monitoring,benchmarks]"
+# Copy requirements first for better Docker layer caching
+COPY requirements.txt .
+COPY pyproject.toml .
+
+# Create virtual environment and install dependencies
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install Python dependencies
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir jax[cpu] flax optax
 
 # Copy source code
-COPY --chown=app:app . .
+COPY pg_neo_graph_rl/ ./pg_neo_graph_rl/
+COPY examples/ ./examples/
+COPY scripts/ ./scripts/
 
-# Install package in development mode
-RUN pip install -e .
-
-CMD ["python", "-m", "pytest"]
+# Install the package
+RUN pip install --no-cache-dir -e .
 
 # Production stage
-FROM base as production
+FROM python:3.11-slim as production
 
-WORKDIR /app
-USER app
-
-# Copy only necessary files
-COPY --chown=app:app pyproject.toml README.md LICENSE ./
-COPY --chown=app:app pg_neo_graph_rl/ ./pg_neo_graph_rl/
-
-# Install production dependencies only
-RUN pip install -e .
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD python -c "import pg_neo_graph_rl; print('OK')" || exit 1
-
-# Default command
-CMD ["python", "-c", "import pg_neo_graph_rl; print('pg-neo-graph-rl ready')"]
-
-# GPU-enabled stage
-FROM nvidia/cuda:11.8-devel-ubuntu20.04 as gpu
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    DEBIAN_FRONTEND=noninteractive
-
-# Install Python and system dependencies
+# Install runtime dependencies
 RUN apt-get update && apt-get install -y \
-    python3.9 \
-    python3.9-dev \
-    python3.9-distutils \
-    python3-pip \
-    build-essential \
-    git \
     curl \
+    procps \
+    htop \
     && rm -rf /var/lib/apt/lists/*
 
-# Create symlinks
-RUN ln -s /usr/bin/python3.9 /usr/bin/python
+# Create non-root user for security
+RUN groupadd -r pgneo && useradd -r -g pgneo pgneo
 
-# Create non-root user
-RUN useradd --create-home --shell /bin/bash app
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
+# Copy application code
+COPY --from=builder /app /app
 WORKDIR /app
-USER app
 
-# Copy and install package
-COPY --chown=app:app pyproject.toml README.md LICENSE ./
-COPY --chown=app:app pg_neo_graph_rl/ ./pg_neo_graph_rl/
+# Create necessary directories
+RUN mkdir -p /app/data /app/logs /app/checkpoints /app/config && \
+    chown -R pgneo:pgneo /app
 
-# Install with GPU support
-RUN pip install -e ".[gpu]"
+# Copy configuration files
+COPY deployment/config/ ./config/
 
-# Health check for GPU
-HEALTHCHECK --interval=30s --timeout=30s --start-period=10s --retries=3 \
-    CMD python -c "import jax; print(f'JAX devices: {jax.devices()}'); assert len(jax.devices()) > 0" || exit 1
+# Health check script
+COPY deployment/healthcheck.py ./healthcheck.py
+RUN chmod +x ./healthcheck.py
 
-CMD ["python", "-c", "import jax; print(f'JAX devices: {jax.devices()}')"]
+# Expose ports
+EXPOSE 8080 8081
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python healthcheck.py
+
+# Switch to non-root user
+USER pgneo
+
+# Environment variables
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV LOG_LEVEL=INFO
+ENV COMPONENT_TYPE=agent
+
+# Default command
+CMD ["python", "-m", "pg_neo_graph_rl.training.cli", "--config", "/app/config/training_config.yaml"]
+
+# Development stage (for local development)
+FROM production as development
+
+USER root
+
+# Install development dependencies
+RUN pip install --no-cache-dir \
+    pytest \
+    pytest-cov \
+    black \
+    ruff \
+    mypy \
+    jupyter \
+    ipython
+
+# Install debugging tools
+RUN apt-get update && apt-get install -y \
+    vim \
+    less \
+    tree \
+    && rm -rf /var/lib/apt/lists/*
+
+USER pgneo
+
+# Override default command for development
+CMD ["python", "-m", "pg_neo_graph_rl.cli", "demo", "--environment", "traffic"]
+
+# GPU-enabled stage
+FROM nvcr.io/nvidia/jax:23.08-py3 as gpu
+
+# Install additional dependencies
+RUN pip install --no-cache-dir \
+    prometheus-client \
+    grafana-api \
+    psutil
+
+# Copy application
+COPY --from=builder /app /app
+WORKDIR /app
+
+# Install the package with GPU support
+RUN pip install --no-cache-dir -e ".[gpu]"
+
+# Create user and directories
+RUN groupadd -r pgneo && useradd -r -g pgneo pgneo && \
+    mkdir -p /app/data /app/logs /app/checkpoints /app/config && \
+    chown -R pgneo:pgneo /app
+
+# Copy configuration
+COPY deployment/config/ ./config/
+COPY deployment/healthcheck.py ./healthcheck.py
+
+EXPOSE 8080 8081
+
+USER pgneo
+
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV JAX_PLATFORM_NAME=gpu
+ENV XLA_PYTHON_CLIENT_PREALLOCATE=false
+
+CMD ["python", "-m", "pg_neo_graph_rl.training.cli", "--config", "/app/config/training_config.yaml", "--gpu"]

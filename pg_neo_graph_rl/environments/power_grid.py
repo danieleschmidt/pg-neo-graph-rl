@@ -3,6 +3,7 @@ Power grid environment for federated RL.
 """
 import jax
 import jax.numpy as jnp
+import jax.random as jrandom
 import networkx as nx
 from typing import Dict, Tuple, Any, Optional
 from ..core.types import GraphState
@@ -14,6 +15,7 @@ class PowerGridEnvironment:
     def __init__(self, grid_file: Optional[str] = None, num_buses: int = 50):
         self.grid_file = grid_file
         self.num_buses = num_buses
+        self.key = jrandom.PRNGKey(42)  # Initialize random key
         
         # Create power grid network
         self.graph = self._create_power_grid()
@@ -70,14 +72,15 @@ class PowerGridEnvironment:
         )
         
         # Update frequency (simple dynamics)
-        frequency_deviation = jnp.random.normal(0, 0.1, size=len(new_voltage))
+        self.key, subkey1, subkey2 = jrandom.split(self.key, 3)
+        frequency_deviation = jrandom.normal(subkey1, shape=(len(new_voltage),)) * 0.1
         new_frequency = jnp.clip(
             self.node_features[:, 1] + frequency_deviation,
             49.5, 50.5  # Frequency limits
         )
         
         # Update power flows (simplified)
-        power_change = jnp.random.normal(0, 0.05, size=len(new_voltage))
+        power_change = jrandom.normal(subkey2, shape=(len(new_voltage),)) * 0.05
         new_active_power = jnp.clip(
             self.node_features[:, 2] + power_change,
             0.0, 2.0

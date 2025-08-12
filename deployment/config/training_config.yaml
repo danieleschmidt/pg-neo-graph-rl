@@ -1,0 +1,223 @@
+# Production training configuration for pg-neo-graph-rl
+# Optimized for scalable federated graph reinforcement learning
+
+# Environment Configuration
+environment:
+  type: "traffic"  # traffic, power_grid, swarm
+  config:
+    num_intersections: 100
+    time_resolution: 5
+    edge_attributes: ["flow", "density", "speed"]
+    dynamic_topology: true
+    noise_level: 0.01
+
+# Federated Learning Configuration
+federated:
+  num_agents: 10
+  aggregation_strategy: "adaptive"  # fedavg, adaptive, trimmed_mean, krum
+  communication_rounds: 100
+  local_epochs: 5
+  
+  # Privacy and Security
+  privacy:
+    enable_differential_privacy: true
+    epsilon: 1.0
+    delta: 1e-5
+    noise_multiplier: 1.1
+    clipping_threshold: 1.0
+  
+  # Communication Optimization
+  communication:
+    compression_type: "adaptive"  # none, gzip, quantization, adaptive
+    compression_ratio: 0.1
+    batch_communication: true
+    batch_size: 10
+    enable_pipelining: true
+
+# Algorithm Configuration
+algorithm:
+  type: "graph_ppo"  # graph_ppo, graph_sac
+  config:
+    learning_rate: 3e-4
+    clip_epsilon: 0.2
+    gamma: 0.99
+    gae_lambda: 0.95
+    entropy_coef: 0.01
+    value_loss_coef: 0.5
+    max_grad_norm: 0.5
+    
+    # Graph Neural Network
+    gnn_config:
+      hidden_dim: 128
+      num_layers: 3
+      activation: "relu"
+      dropout_rate: 0.1
+      attention_heads: 8
+      
+    # PPO-specific
+    ppo_epochs: 4
+    mini_batch_size: 64
+    target_kl: 0.01
+
+# Training Configuration
+training:
+  max_episodes: 1000
+  max_steps_per_episode: 500
+  eval_frequency: 10
+  save_frequency: 50
+  
+  # Early Stopping
+  early_stopping:
+    enabled: true
+    patience: 20
+    min_delta: 0.001
+    
+  # Curriculum Learning
+  curriculum:
+    enabled: true
+    initial_difficulty: 0.3
+    max_difficulty: 1.0
+    difficulty_increment: 0.1
+
+# Optimization Configuration
+optimization:
+  # Caching
+  caching:
+    enabled: true
+    max_cache_size: 1000
+    max_memory_mb: 500
+    enable_prefetch: true
+    
+  # Auto-scaling
+  auto_scaling:
+    enabled: true
+    min_agents: 2
+    max_agents: 20
+    target_load_percentage: 70.0
+    scaling_cooldown: 300
+    
+  # Performance Profiling
+  profiling:
+    enabled: true
+    profile_jax: true
+    export_frequency: 100
+
+# Monitoring Configuration
+monitoring:
+  # Metrics Collection
+  metrics:
+    enabled: true
+    port: 8080
+    collection_interval: 30
+    
+  # Health Monitoring
+  health:
+    check_interval: 30
+    heartbeat_timeout: 60
+    
+  # Alerting
+  alerting:
+    enabled: true
+    thresholds:
+      memory_usage_percent: 85.0
+      cpu_usage_percent: 90.0
+      error_rate_percent: 5.0
+      training_loss_threshold: 10.0
+
+# Security Configuration
+security:
+  # Input Validation
+  validation:
+    enabled: true
+    max_input_length: 10000
+    validate_file_paths: true
+    
+  # Rate Limiting
+  rate_limiting:
+    enabled: true
+    requests_per_minute: 100
+    requests_per_hour: 1000
+    
+  # Audit Logging
+  audit:
+    enabled: true
+    log_level: "INFO"
+    sensitive_data_masking: true
+
+# Backup and Recovery
+backup:
+  # Checkpointing
+  checkpoints:
+    enabled: true
+    base_dir: "/app/checkpoints"
+    max_checkpoints: 10
+    auto_backup_interval: 10  # episodes
+    compression: true
+    
+  # Disaster Recovery
+  recovery:
+    enabled: true
+    backup_retention_days: 30
+    
+# Resource Limits
+resources:
+  # Memory Management
+  memory:
+    max_memory_per_agent_gb: 2.0
+    gc_frequency: 100  # episodes
+    
+  # JAX Configuration
+  jax:
+    platform: "cpu"  # cpu, gpu, tpu
+    preallocate_memory: false
+    memory_fraction: 0.8
+    
+# Logging Configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # File Logging
+  file:
+    enabled: true
+    path: "/app/logs/pg_neo_rl.log"
+    max_size_mb: 100
+    backup_count: 5
+    
+  # Structured Logging
+  structured:
+    enabled: true
+    include_metadata: true
+    
+# Experimental Features
+experimental:
+  # Research Modules
+  research:
+    enabled: false
+    modules: ["quantum_optimization", "neuromorphic_computing"]
+    
+  # Advanced Algorithms
+  algorithms:
+    enable_scaffold: false
+    enable_fednova: false
+    enable_fedopt: false
+    
+  # Hardware Acceleration
+  acceleration:
+    enable_mixed_precision: false
+    enable_gradient_compression: true
+    enable_model_parallelism: false
+
+# Production Overrides
+production:
+  # Override development settings for production
+  debug_mode: false
+  verbose_logging: false
+  enable_profiling: true
+  strict_validation: true
+  
+  # Performance Tuning
+  performance:
+    jit_compilation: true
+    vectorization: true
+    memory_optimization: true

@@ -12,7 +12,7 @@ import jax.numpy as jnp
 from .exceptions import SecurityError, ValidationError
 
 
-class SecureValidator:
+class SecurityValidator:
     """Validates inputs for security issues."""
     
     @staticmethod
@@ -22,7 +22,7 @@ class SecureValidator:
             raise ValidationError("Path must be string")
         
         # Check for path traversal
-        if ".." in path or path.startswith("/"):
+        if ".." in path:
             raise SecurityError("Path traversal detected")
         
         # Check for suspicious patterns
@@ -31,6 +31,15 @@ class SecureValidator:
             raise SecurityError("Suspicious pattern in path")
         
         return path
+    
+    @staticmethod
+    def validate_string_input(text: str, field_name: str = "input") -> None:
+        """Validate string input for security risks."""
+        if not isinstance(text, str):
+            raise SecurityError(f"Input {field_name} must be string")
+        
+        if len(text) > 10000:
+            raise SecurityError(f"Input {field_name} too long")
     
     @staticmethod
     def sanitize_config(config: Dict[str, Any]) -> Dict[str, Any]:
@@ -46,6 +55,10 @@ class SecureValidator:
             if isinstance(value, (int, float)):
                 if abs(value) > 1e10:
                     raise SecurityError(f"Value too large: {key}")
+            
+            # Validate string inputs
+            if isinstance(value, str):
+                SecurityValidator.validate_string_input(value, key)
             
             sanitized[key] = value
         
