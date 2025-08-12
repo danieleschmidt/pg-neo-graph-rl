@@ -1,0 +1,436 @@
+---
+# Production deployment configuration for pg-neo-graph-rl
+# Kubernetes deployment for scalable federated graph reinforcement learning
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pg-neo-graph-rl
+  labels:
+    app: pg-neo-graph-rl
+    environment: production
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pg-neo-rl-config
+  namespace: pg-neo-graph-rl
+data:
+  federated_config.yaml: |
+    federated:
+      num_agents: 10
+      aggregation: "adaptive"
+      communication_rounds: 50
+      privacy:
+        epsilon: 1.0
+        delta: 1e-5
+      
+    training:
+      max_episodes: 1000
+      batch_size: 32
+      learning_rate: 3e-4
+      
+    monitoring:
+      metrics_port: 8080
+      health_check_interval: 30
+      alerting_enabled: true
+      
+    optimization:
+      enable_caching: true
+      auto_scaling: true
+      performance_profiling: true
+      
+    security:
+      validation_enabled: true
+      rate_limiting: true
+      audit_logging: true
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pg-neo-rl-secrets
+  namespace: pg-neo-graph-rl
+type: Opaque
+data:
+  # Base64 encoded secrets (replace with actual values)
+  api_key: <base64-encoded-api-key>
+  database_password: <base64-encoded-db-password>
+  monitoring_token: <base64-encoded-monitoring-token>
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pg-neo-rl-coordinator
+  namespace: pg-neo-graph-rl
+  labels:
+    app: pg-neo-rl
+    component: coordinator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pg-neo-rl
+      component: coordinator
+  template:
+    metadata:
+      labels:
+        app: pg-neo-rl
+        component: coordinator
+    spec:
+      containers:
+      - name: coordinator
+        image: pg-neo-graph-rl:latest
+        ports:
+        - containerPort: 8080
+          name: metrics
+        - containerPort: 8081
+          name: api
+        env:
+        - name: COMPONENT_TYPE
+          value: "coordinator"
+        - name: CONFIG_PATH
+          value: "/etc/config/federated_config.yaml"
+        - name: LOG_LEVEL
+          value: "INFO"
+        volumeMounts:
+        - name: config
+          mountPath: /etc/config
+        - name: secrets
+          mountPath: /etc/secrets
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: config
+        configMap:
+          name: pg-neo-rl-config
+      - name: secrets
+        secret:
+          secretName: pg-neo-rl-secrets
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pg-neo-rl-agents
+  namespace: pg-neo-graph-rl
+  labels:
+    app: pg-neo-rl
+    component: agent
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      app: pg-neo-rl
+      component: agent
+  template:
+    metadata:
+      labels:
+        app: pg-neo-rl
+        component: agent
+    spec:
+      containers:
+      - name: agent
+        image: pg-neo-graph-rl:latest
+        ports:
+        - containerPort: 8080
+          name: metrics
+        env:
+        - name: COMPONENT_TYPE
+          value: "agent"
+        - name: COORDINATOR_URL
+          value: "http://pg-neo-rl-coordinator:8081"
+        - name: AGENT_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        volumeMounts:
+        - name: config
+          mountPath: /etc/config
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+      volumes:
+      - name: config
+        configMap:
+          name: pg-neo-rl-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pg-neo-rl-coordinator
+  namespace: pg-neo-graph-rl
+  labels:
+    app: pg-neo-rl
+    component: coordinator
+spec:
+  selector:
+    app: pg-neo-rl
+    component: coordinator
+  ports:
+  - name: metrics
+    port: 8080
+    targetPort: 8080
+  - name: api
+    port: 8081
+    targetPort: 8081
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pg-neo-rl-agents
+  namespace: pg-neo-graph-rl
+  labels:
+    app: pg-neo-rl
+    component: agent
+spec:
+  selector:
+    app: pg-neo-rl
+    component: agent
+  ports:
+  - name: metrics
+    port: 8080
+    targetPort: 8080
+  type: ClusterIP
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: pg-neo-rl-agents-hpa
+  namespace: pg-neo-graph-rl
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: pg-neo-rl-agents
+  minReplicas: 2
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pg-neo-rl-network-policy
+  namespace: pg-neo-graph-rl
+spec:
+  podSelector:
+    matchLabels:
+      app: pg-neo-rl
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    - podSelector:
+        matchLabels:
+          app: pg-neo-rl
+    ports:
+    - protocol: TCP
+      port: 8080
+    - protocol: TCP
+      port: 8081
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: pg-neo-rl
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pg-neo-rl-data
+  namespace: pg-neo-graph-rl
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: fast-ssd
+
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pg-neo-rl-backup
+  namespace: pg-neo-graph-rl
+spec:
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: backup
+            image: pg-neo-graph-rl:latest
+            command:
+            - /bin/bash
+            - -c
+            - |
+              python3 -c "
+              from pg_neo_graph_rl.utils.backup import create_backup_system
+              checkpoint_manager, _, _ = create_backup_system('/data/checkpoints')
+              checkpoint_manager.cleanup_checkpoints(keep_latest=10)
+              print('Backup completed successfully')
+              "
+            volumeMounts:
+            - name: data
+              mountPath: /data
+          volumes:
+          - name: data
+            persistentVolumeClaim:
+              claimName: pg-neo-rl-data
+          restartPolicy: OnFailure
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: pg-neo-rl-metrics
+  namespace: pg-neo-graph-rl
+  labels:
+    app: pg-neo-rl
+spec:
+  selector:
+    matchLabels:
+      app: pg-neo-rl
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+    honorLabels: true
+
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: pg-neo-rl-alerts
+  namespace: pg-neo-graph-rl
+spec:
+  groups:
+  - name: pg-neo-rl.rules
+    rules:
+    - alert: PGNeoRLHighMemoryUsage
+      expr: container_memory_usage_bytes{namespace="pg-neo-graph-rl"} / container_spec_memory_limit_bytes > 0.9
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High memory usage in pg-neo-graph-rl"
+        description: "Memory usage is above 90% for {{ $labels.pod }}"
+    
+    - alert: PGNeoRLHighCPUUsage
+      expr: rate(container_cpu_usage_seconds_total{namespace="pg-neo-graph-rl"}[5m]) > 0.8
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High CPU usage in pg-neo-graph-rl"
+        description: "CPU usage is above 80% for {{ $labels.pod }}"
+    
+    - alert: PGNeoRLPodCrashLooping
+      expr: rate(kube_pod_container_status_restarts_total{namespace="pg-neo-graph-rl"}[15m]) > 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Pod crash looping in pg-neo-graph-rl"
+        description: "Pod {{ $labels.pod }} is crash looping"
+    
+    - alert: PGNeoRLTrainingStalled
+      expr: increase(pg_neo_rl_training_episodes_total[10m]) == 0
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Training appears stalled"
+        description: "No training progress in the last 10 minutes"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pg-neo-rl-external
+  namespace: pg-neo-graph-rl
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: tcp
+spec:
+  selector:
+    app: pg-neo-rl
+    component: coordinator
+  ports:
+  - name: api
+    port: 80
+    targetPort: 8081
+    protocol: TCP
+  type: LoadBalancer

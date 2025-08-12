@@ -103,3 +103,83 @@ class ResourceError(GraphRLError):
             full_message = f"[{resource_type}] {message}"
             
         super().__init__(full_message)
+
+
+class TrainingError(GraphRLError):
+    """Raised when training operations fail."""
+    
+    def __init__(self, message: str, episode: int = None, agent_id: int = None):
+        self.episode = episode
+        self.agent_id = agent_id
+        
+        full_message = message
+        if episode is not None:
+            full_message += f" (Episode: {episode})"
+        if agent_id is not None:
+            full_message += f" (Agent: {agent_id})"
+            
+        super().__init__(full_message)
+
+
+class CircuitBreakerError(GraphRLError):
+    """Raised when circuit breaker is open."""
+    
+    def __init__(self, message: str, service_name: str = None, failure_count: int = None):
+        self.service_name = service_name
+        self.failure_count = failure_count
+        
+        full_message = message
+        if service_name:
+            full_message = f"[{service_name}] {message}"
+        if failure_count is not None:
+            full_message += f" (Failures: {failure_count})"
+            
+        super().__init__(full_message)
+
+
+class ConfigurationError(GraphRLError):
+    """Raised when configuration is invalid."""
+    
+    def __init__(self, message: str, config_key: str = None, config_file: str = None):
+        self.config_key = config_key
+        self.config_file = config_file
+        
+        full_message = message
+        if config_key:
+            full_message += f" (Key: {config_key})"
+        if config_file:
+            full_message += f" (File: {config_file})"
+            
+        super().__init__(full_message)
+
+
+class TimeoutError(GraphRLError):
+    """Raised when operations timeout."""
+    
+    def __init__(self, message: str, timeout_seconds: float = None, operation: str = None):
+        self.timeout_seconds = timeout_seconds
+        self.operation = operation
+        
+        full_message = message
+        if operation:
+            full_message = f"[{operation}] {message}"
+        if timeout_seconds is not None:
+            full_message += f" (Timeout: {timeout_seconds}s)"
+            
+        super().__init__(full_message)
+
+
+class BackupError(GraphRLError):
+    """Raised when backup/recovery operations fail."""
+    
+    def __init__(self, message: str, backup_type: str = None, checkpoint: str = None):
+        self.backup_type = backup_type
+        self.checkpoint = checkpoint
+        
+        full_message = message
+        if backup_type:
+            full_message = f"[{backup_type}] {message}"
+        if checkpoint:
+            full_message += f" (Checkpoint: {checkpoint})"
+            
+        super().__init__(full_message)
