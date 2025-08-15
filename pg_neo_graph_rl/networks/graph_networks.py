@@ -12,7 +12,7 @@ def graph_conv_layer(nodes: jnp.ndarray,
                     adjacency: jnp.ndarray,
                     weight: jnp.ndarray,
                     bias: Optional[jnp.ndarray] = None,
-                    activation: Callable = jax.nn.relu) -> jnp.ndarray:
+                    activation: Callable = lambda x: jnp.maximum(0, x)) -> jnp.ndarray:
     """
     Basic graph convolution operation.
     
