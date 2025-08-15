@@ -1,0 +1,47 @@
+groups:
+- name: federated_graph_rl_alerts
+  rules:
+  - alert: HighErrorRate
+    expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.1
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High error rate detected"
+      description: "Error rate is {{ $value }} errors per second"
+      
+  - alert: HighLatency
+    expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 0.5
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High latency detected"
+      description: "95th percentile latency is {{ $value }} seconds"
+      
+  - alert: MemoryUsageHigh
+    expr: (container_memory_usage_bytes / container_spec_memory_limit_bytes) > 0.85
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High memory usage"
+      description: "Memory usage is {{ $value | humanizePercentage }}"
+      
+  - alert: CPUUsageHigh
+    expr: rate(container_cpu_usage_seconds_total[5m]) > 0.8
+    for: 10m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High CPU usage"
+      description: "CPU usage is {{ $value | humanizePercentage }}"
+      
+  - alert: FederatedLearningConvergenceIssue
+    expr: increase(federated_learning_convergence_failures_total[1h]) > 5
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      summary: "Federated learning convergence issues"
+      description: "{{ $value }} convergence failures in the last hour"
