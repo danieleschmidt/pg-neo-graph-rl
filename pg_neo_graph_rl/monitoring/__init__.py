@@ -1,3 +1,3 @@
-from .metrics import MetricsCollector, FederatedMetrics
+from .metrics import FederatedMetrics, MetricsCollector
 
 __all__ = ["MetricsCollector", "FederatedMetrics"]

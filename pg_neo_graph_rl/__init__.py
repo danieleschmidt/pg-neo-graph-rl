@@ -8,17 +8,17 @@ dynamic graph neural networks and federated reinforcement learning.
 __version__ = "0.1.0"
 __author__ = "Daniel Schmidt"
 
+from .algorithms import GraphPPO, GraphSAC
 from .core import FederatedGraphRL
 from .core.types import GraphState
-from .algorithms import GraphPPO, GraphSAC
-from .environments import TrafficEnvironment, PowerGridEnvironment, SwarmEnvironment
+from .environments import PowerGridEnvironment, SwarmEnvironment, TrafficEnvironment
 
 __all__ = [
     "FederatedGraphRL",
     "GraphState",
-    "GraphPPO", 
+    "GraphPPO",
     "GraphSAC",
     "TrafficEnvironment",
-    "PowerGridEnvironment", 
+    "PowerGridEnvironment",
     "SwarmEnvironment"
 ]
