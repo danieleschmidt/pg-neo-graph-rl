@@ -1,7 +1,7 @@
 """
 Training utilities and CLI for pg-neo-graph-rl.
 """
-from .trainer import FederatedTrainer
 from .config import TrainingConfig
+from .trainer import FederatedTrainer
 
 __all__ = ["FederatedTrainer", "TrainingConfig"]
