@@ -12,25 +12,31 @@ This module contains cutting-edge research implementations including:
 """
 
 from .adaptive_topology import SelfOrganizingFederatedRL
-from .temporal_memory import HierarchicalTemporalGraphAttention
-from .quantum_optimization import QuantumInspiredFederatedRL, QuantumClassicalHybridOptimizer
-from .neuromorphic_computing import NeuromorphicFederatedRL
-from .causal_discovery import FederatedCausalDiscovery
-from .performance_optimization import AutoScalingFederatedRL
-from .experimental_framework import ResearchBenchmarkSuite
 from .autonomous_meta_learning import AutonomousMetaLearner, NeuralArchitectureSearch
-from .self_evolving_architectures import SelfEvolvingGraphNetwork, EvolutionController
-from .causal_aware_federated_learning import CausalAwareFederatedLearner, FederatedCausalDiscovery as CausalDiscoveryEngine
+from .causal_aware_federated_learning import CausalAwareFederatedLearner
+from .causal_aware_federated_learning import (
+    FederatedCausalDiscovery as CausalDiscoveryEngine,
+)
+from .causal_discovery import FederatedCausalDiscovery
+from .experimental_framework import ResearchBenchmarkSuite
 from .multimodal_fusion import MultiModalFederatedLearner, MultiModalFusionNetwork
+from .neuromorphic_computing import NeuromorphicFederatedRL
+from .performance_optimization import AutoScalingFederatedRL
+from .quantum_optimization import (
+    QuantumClassicalHybridOptimizer,
+    QuantumInspiredFederatedRL,
+)
+from .self_evolving_architectures import EvolutionController, SelfEvolvingGraphNetwork
+from .temporal_memory import HierarchicalTemporalGraphAttention
 
 __all__ = [
     "SelfOrganizingFederatedRL",
-    "HierarchicalTemporalGraphAttention", 
+    "HierarchicalTemporalGraphAttention",
     "QuantumInspiredFederatedRL",
     "QuantumClassicalHybridOptimizer",
     "NeuromorphicFederatedRL",
     "FederatedCausalDiscovery",
-    "AutoScalingFederatedRL", 
+    "AutoScalingFederatedRL",
     "ResearchBenchmarkSuite",
     "AutonomousMetaLearner",
     "NeuralArchitectureSearch",
