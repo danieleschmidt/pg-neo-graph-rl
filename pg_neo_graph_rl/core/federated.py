@@ -389,10 +389,19 @@ class FederatedGraphRL:
                         )
 
                     # Use zero gradients for failed agents
-                    if agent_gradients:
+                    if valid_gradients:
+                        # Use the first valid gradient as template
                         zero_grads = {}
-                        for key, grad in agent_gradients[0].items():
-                            zero_grads[key] = jnp.zeros_like(grad)
+                        template_grads = valid_gradients[0]
+                        for key, grad in template_grads.items():
+                            if isinstance(grad, dict):
+                                # Handle nested gradients
+                                zero_grads[key] = {}
+                                for nested_key, nested_grad in grad.items():
+                                    if hasattr(nested_grad, 'shape'):
+                                        zero_grads[key][nested_key] = jnp.zeros_like(nested_grad)
+                            elif hasattr(grad, 'shape'):
+                                zero_grads[key] = jnp.zeros_like(grad)
                         valid_gradients.append(zero_grads)
                     else:
                         valid_gradients.append({})

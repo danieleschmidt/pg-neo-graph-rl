@@ -114,7 +114,7 @@ class GraphValueNetwork(nn.Module):
         Returns:
             State values [num_nodes, 1]
         """
-        # Graph encoding  
+        # Graph encoding
         embeddings = self.graph_encoder(nodes, edges, adjacency, training=training)
 
         # Value head

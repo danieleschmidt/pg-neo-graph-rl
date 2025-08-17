@@ -102,7 +102,8 @@ class TestCoreComponents:
             [0, 0, 0, 0, 0]
         ])
         
-        state = GraphState(nodes=nodes, edges=edges, adjacency=adjacency)
+        edge_attr = jnp.ones((edges.shape[0], 1))
+        state = GraphState(nodes=nodes, edges=edges, edge_attr=edge_attr, adjacency=adjacency)
         
         # Should not raise exception
         try:
@@ -309,7 +310,8 @@ class TestOptimization:
         adjacency = np.eye(100)
         edges = np.array([[0, 1], [1, 2]])
         
-        state = GraphState(nodes=nodes, edges=edges, adjacency=adjacency)
+        edge_attr = jnp.ones((edges.shape[0], 1))
+        state = GraphState(nodes=nodes, edges=edges, edge_attr=edge_attr, adjacency=adjacency)
         
         # Optimize state
         optimized_state = optimizer.optimize_graph_state(state)
@@ -372,7 +374,8 @@ class TestPerformance:
             edges = np.random.randint(0, 50, (100, 2))
             adjacency = np.random.rand(50, 50)
             
-            state = GraphState(nodes=nodes, edges=edges, adjacency=adjacency)
+            edge_attr = jnp.ones((edges.shape[0], 1))
+        state = GraphState(nodes=nodes, edges=edges, edge_attr=edge_attr, adjacency=adjacency)
         
         duration = time.time() - start_time
         
@@ -442,7 +445,8 @@ class TestSecurity:
             edges = np.array([[0, 1]])
             adjacency = np.eye(10)
             
-            state = GraphState(nodes=nodes, edges=edges, adjacency=adjacency)
+            edge_attr = jnp.ones((edges.shape[0], 1))
+            state = GraphState(nodes=nodes, edges=edges, edge_attr=edge_attr, adjacency=adjacency)
             validate_graph_state(state)
     
     def test_large_input_handling(self):
@@ -456,7 +460,8 @@ class TestSecurity:
             adjacency = np.eye(10000)  # Large adjacency matrix
             edges = np.random.randint(0, 10000, (50000, 2))  # Many edges
             
-            state = GraphState(nodes=nodes, edges=edges, adjacency=adjacency)
+            edge_attr = jnp.ones((edges.shape[0], 1))
+            state = GraphState(nodes=nodes, edges=edges, edge_attr=edge_attr, adjacency=adjacency)
             
             # This should either work or fail gracefully
             large_input_handled = True

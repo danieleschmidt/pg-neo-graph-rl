@@ -113,8 +113,16 @@ def check_gradient_norm(gradients: Dict[str, jnp.ndarray],
 
     for key, grad in gradients.items():
         if grad is not None:
-            grad_norm = jnp.linalg.norm(grad.flatten())
-            total_norm += grad_norm ** 2
+            # Handle nested gradient dictionaries
+            if isinstance(grad, dict):
+                # Recursively check nested gradients
+                for nested_key, nested_grad in grad.items():
+                    if nested_grad is not None and hasattr(nested_grad, 'flatten'):
+                        grad_norm = jnp.linalg.norm(nested_grad.flatten())
+                        total_norm += grad_norm ** 2
+            elif hasattr(grad, 'flatten'):
+                grad_norm = jnp.linalg.norm(grad.flatten())
+                total_norm += grad_norm ** 2
 
     total_norm = jnp.sqrt(total_norm)
 
