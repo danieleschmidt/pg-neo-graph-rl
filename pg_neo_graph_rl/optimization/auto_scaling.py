@@ -199,7 +199,7 @@ class AutoScaler:
                 self.workers[worker_id].performance_score = performance_score
     
     def get_scaling_metrics(self) -> ScalingMetrics:
-        \"\"\"Calculate current scaling metrics.\"\"\"
+        """Calculate current scaling metrics."""
         with self.lock:
             active_workers = [w for w in self.workers.values() if w.is_healthy()]
             
@@ -237,12 +237,12 @@ class AutoScaler:
             )
     
     def evaluate_scaling_decision(self, metrics: ScalingMetrics) -> Tuple[ScalingDirection, int, str]:
-        \"\"\"
+        """
         Evaluate whether scaling is needed.
         
         Returns:
             Tuple of (direction, amount, reason)
-        \"\"\"
+        """
         current_time = time.time()
         active_workers = len([w for w in self.workers.values() if w.is_healthy()])
         
@@ -293,7 +293,7 @@ class AutoScaler:
         return ScalingDirection.STABLE, 0, "No scaling rules triggered"
     
     def execute_scaling(self, direction: ScalingDirection, amount: int, reason: str) -> bool:
-        \"\"\"Execute scaling decision.\"\"\"
+        """Execute scaling decision."""
         if direction == ScalingDirection.STABLE or amount == 0:
             return True
         
@@ -355,7 +355,7 @@ class AutoScaler:
             return False
     
     async def start_monitoring(self):
-        \"\"\"Start the auto-scaling monitoring loop.\"\"\"
+        """Start the auto-scaling monitoring loop."""
         self.is_running = True
         logger.info("Starting auto-scaling monitoring")
         
@@ -387,12 +387,12 @@ class AutoScaler:
                 await asyncio.sleep(10)  # Brief pause on error
     
     def stop_monitoring(self):
-        \"\"\"Stop auto-scaling monitoring.\"\"\"
+        """Stop auto-scaling monitoring."""
         self.is_running = False
         logger.info("Stopped auto-scaling monitoring")
     
     def get_status(self) -> Dict[str, Any]:
-        \"\"\"Get comprehensive auto-scaling status.\"\"\"
+        """Get comprehensive auto-scaling status."""
         with self.lock:
             active_workers = [w for w in self.workers.values() if w.is_healthy()]
             
@@ -426,9 +426,9 @@ class AutoScaler:
 
 
 class LoadBalancer:
-    \"\"\"
+    """
     Load balancer for distributing work across federated learning workers.
-    \"\"\"
+    """
     
     def __init__(self, 
                  strategy: LoadBalancingStrategy = LoadBalancingStrategy.ADAPTIVE,
@@ -450,13 +450,13 @@ class LoadBalancer:
         logger.info(f"LoadBalancer initialized with strategy: {strategy.value}")
     
     def add_worker(self, worker: WorkerNode) -> None:
-        \"\"\"Add worker to load balancer.\"\"\"
+        """Add worker to load balancer."""
         with self.lock:
             self.workers[worker.worker_id] = worker
             logger.info(f"Added worker to load balancer: {worker.worker_id}")
     
     def remove_worker(self, worker_id: str) -> bool:
-        \"\"\"Remove worker from load balancer.\"\"\"
+        """Remove worker from load balancer."""
         with self.lock:
             if worker_id in self.workers:
                 del self.workers[worker_id]
@@ -465,7 +465,7 @@ class LoadBalancer:
             return False
     
     def select_worker(self, task_key: Optional[str] = None) -> Optional[WorkerNode]:
-        \"\"\"Select optimal worker based on strategy.\"\"\"
+        """Select optimal worker based on strategy."""
         with self.lock:
             healthy_workers = [w for w in self.workers.values() if w.is_healthy()]
             
@@ -491,17 +491,17 @@ class LoadBalancer:
                 return healthy_workers[0]  # Fallback
     
     def _round_robin_selection(self, workers: List[WorkerNode]) -> WorkerNode:
-        \"\"\"Round robin worker selection.\"\"\"
+        """Round robin worker selection."""
         worker = workers[self.round_robin_index % len(workers)]
         self.round_robin_index += 1
         return worker
     
     def _least_loaded_selection(self, workers: List[WorkerNode]) -> WorkerNode:
-        \"\"\"Select worker with lowest load percentage.\"\"\"
+        """Select worker with lowest load percentage."""
         return min(workers, key=lambda w: w.load_percentage)
     
     def _weighted_round_robin_selection(self, workers: List[WorkerNode]) -> WorkerNode:
-        \"\"\"Weighted round robin based on worker weights.\"\"\"
+        """Weighted round robin based on worker weights."""
         # Create weighted list
         weighted_workers = []
         for worker in workers:
@@ -516,7 +516,7 @@ class LoadBalancer:
         return workers[0]
     
     def _hash_based_selection(self, workers: List[WorkerNode], task_key: Optional[str]) -> WorkerNode:
-        \"\"\"Hash-based consistent worker selection.\"\"\"
+        """Hash-based consistent worker selection."""
         if task_key is None:
             return workers[0]
         
@@ -525,7 +525,7 @@ class LoadBalancer:
         return workers[hash_value]
     
     def _adaptive_selection(self, workers: List[WorkerNode]) -> WorkerNode:
-        \"\"\"Adaptive selection based on performance metrics.\"\"\"
+        """Adaptive selection based on performance metrics."""
         # Calculate composite scores for each worker
         scores = []
         
@@ -562,17 +562,17 @@ class LoadBalancer:
         return max(scores, key=lambda x: x[1])[0]
     
     def record_response_time(self, worker_id: str, response_time: float) -> None:
-        \"\"\"Record response time for adaptive selection.\"\"\"
+        """Record response time for adaptive selection."""
         if worker_id in self.workers:
             self.worker_response_times[worker_id].append(response_time)
     
     def record_error(self, worker_id: str) -> None:
-        \"\"\"Record error for adaptive selection.\"\"\"
+        """Record error for adaptive selection."""
         if worker_id in self.workers:
             self.worker_error_counts[worker_id] += 1
     
     def get_load_distribution(self) -> Dict[str, float]:
-        \"\"\"Get current load distribution across workers.\"\"\"
+        """Get current load distribution across workers."""
         with self.lock:
             return {
                 worker_id: worker.load_percentage
@@ -583,7 +583,7 @@ class LoadBalancer:
 
 def create_auto_scaling_system(min_workers: int = 2, 
                               max_workers: int = 10) -> Tuple[AutoScaler, LoadBalancer]:
-    \"\"\"
+    """
     Create complete auto-scaling system with load balancer.
     
     Args:
@@ -592,7 +592,7 @@ def create_auto_scaling_system(min_workers: int = 2,
         
     Returns:
         Tuple of (AutoScaler, LoadBalancer)
-    \"\"\"
+    """
     auto_scaler = AutoScaler(
         min_workers=min_workers,
         max_workers=max_workers,

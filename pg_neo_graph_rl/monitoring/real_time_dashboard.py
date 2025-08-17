@@ -46,4 +46,390 @@ class RealTimeDashboard:
         self.performance_history = defaultdict(lambda: deque(maxlen=self.config.history_length))
         
         # Dashboard data
-        self.dashboard_data = {\n            'system': {},\n            'federated': {},\n            'agents': {},\n            'alerts': [],\n            'circuit_breakers': {},\n            'predictions': {},\n            'metadata': {\n                'last_update': 0,\n                'update_interval': self.config.update_interval,\n                'active_agents': 0\n            }\n        }\n        \n        logger.info(\"Real-time dashboard initialized\")\n    \n    def start(self, metrics_aggregator: FederatedMetricsAggregator) -> None:\n        \"\"\"Start the real-time dashboard.\"\"\"\n        if self.active:\n            logger.warning(\"Dashboard already active\")\n            return\n            \n        self.metrics_aggregator = metrics_aggregator\n        self.active = True\n        self.stop_event.clear()\n        \n        # Start update thread\n        self.update_thread = threading.Thread(target=self._update_loop, daemon=True)\n        self.update_thread.start()\n        \n        logger.info(\"Real-time dashboard started\")\n    \n    def stop(self) -> None:\n        \"\"\"Stop the real-time dashboard.\"\"\"\n        if not self.active:\n            return\n            \n        self.active = False\n        self.stop_event.set()\n        \n        if self.update_thread and self.update_thread.is_alive():\n            self.update_thread.join(timeout=5.0)\n            \n        logger.info(\"Real-time dashboard stopped\")\n    \n    def _update_loop(self) -> None:\n        \"\"\"Main update loop for dashboard.\"\"\"\n        while self.active and not self.stop_event.wait(self.config.update_interval):\n            try:\n                self._update_dashboard_data()\n            except Exception as e:\n                logger.error(f\"Dashboard update error: {e}\")\n    \n    def _update_dashboard_data(self) -> None:\n        \"\"\"Update all dashboard data.\"\"\"\n        current_time = time.time()\n        \n        # Update system metrics\n        self._update_system_metrics()\n        \n        # Update federated learning metrics\n        self._update_federated_metrics()\n        \n        # Update agent-specific metrics\n        self._update_agent_metrics()\n        \n        # Update circuit breaker status\n        self._update_circuit_breakers()\n        \n        # Check for alerts\n        self._check_alerts()\n        \n        # Generate predictions if enabled\n        if self.config.enable_predictions:\n            self._update_predictions()\n        \n        # Update metadata\n        self.dashboard_data['metadata'].update({\n            'last_update': current_time,\n            'active_agents': len(self.metrics_aggregator.agent_collectors) if self.metrics_aggregator else 0\n        })\n        \n        self.last_update = current_time\n    \n    def _update_system_metrics(self) -> None:\n        \"\"\"Update system-wide metrics.\"\"\"\n        try:\n            import psutil\n            \n            # CPU and memory\n            cpu_percent = psutil.cpu_percent(interval=0.1)\n            memory = psutil.virtual_memory()\n            disk = psutil.disk_usage('/')\n            \n            # Network I/O\n            net_io = psutil.net_io_counters()\n            \n            system_data = {\n                'cpu_usage': cpu_percent,\n                'memory_usage': memory.percent,\n                'memory_available_gb': memory.available / (1024**3),\n                'disk_usage': disk.percent,\n                'network_bytes_sent': net_io.bytes_sent,\n                'network_bytes_recv': net_io.bytes_recv,\n                'timestamp': time.time()\n            }\n            \n            # Track history\n            for key, value in system_data.items():\n                if key != 'timestamp':\n                    self.performance_history[f'system_{key}'].append(value)\n            \n            self.dashboard_data['system'] = system_data\n            \n        except ImportError:\n            logger.warning(\"psutil not available for system metrics\")\n            self.dashboard_data['system'] = {'error': 'psutil not available'}\n        except Exception as e:\n            logger.error(f\"System metrics error: {e}\")\n            self.dashboard_data['system'] = {'error': str(e)}\n    \n    def _update_federated_metrics(self) -> None:\n        \"\"\"Update federated learning metrics.\"\"\"\n        if not self.metrics_aggregator:\n            return\n            \n        try:\n            # Key federated metrics\n            convergence_metrics = self.metrics_aggregator.get_convergence_metrics()\n            \n            # Aggregate important metrics across agents\n            key_metrics = ['episode_reward', 'loss', 'gradient_norm', 'episode_duration']\n            aggregated_data = {}\n            \n            for metric in key_metrics:\n                agg = self.metrics_aggregator.aggregate_metric(metric)\n                if agg:\n                    aggregated_data[metric] = {\n                        'mean': agg.mean,\n                        'std': agg.std,\n                        'min': agg.min,\n                        'max': agg.max,\n                        'count': agg.count\n                    }\n                    \n                    # Track history\n                    self.performance_history[f'fed_{metric}_mean'].append(agg.mean)\n            \n            federated_data = {\n                'convergence': convergence_metrics,\n                'aggregated_metrics': aggregated_data,\n                'global_stats': {\n                    'total_episodes': sum(len(collector.get_recent_values('episode_reward', 1000)) \n                                        for collector in self.metrics_aggregator.agent_collectors.values()),\n                    'active_agents': len(self.metrics_aggregator.agent_collectors)\n                },\n                'timestamp': time.time()\n            }\n            \n            self.dashboard_data['federated'] = federated_data\n            \n        except Exception as e:\n            logger.error(f\"Federated metrics error: {e}\")\n            self.dashboard_data['federated'] = {'error': str(e)}\n    \n    def _update_agent_metrics(self) -> None:\n        \"\"\"Update individual agent metrics.\"\"\"\n        if not self.metrics_aggregator:\n            return\n            \n        try:\n            agent_data = {}\n            \n            for agent_id, collector in self.metrics_aggregator.agent_collectors.items():\n                if len(agent_data) >= self.config.max_agents_display:\n                    break\n                    \n                # Recent performance\n                recent_rewards = collector.get_recent_values('episode_reward', 10)\n                recent_losses = collector.get_recent_values('loss', 50)\n                \n                agent_metrics = {\n                    'id': agent_id,\n                    'recent_reward': np.mean(recent_rewards) if recent_rewards else 0.0,\n                    'reward_trend': collector.get_trend('episode_reward', 50),\n                    'recent_loss': np.mean(recent_losses) if recent_losses else 0.0,\n                    'episode_count': len(collector.get_recent_values('episode_reward', 1000)),\n                    'last_update': time.time()\n                }\n                \n                # Health status\n                if recent_rewards:\n                    agent_metrics['status'] = 'active'\n                    if np.mean(recent_rewards) < -1000:  # Threshold for poor performance\n                        agent_metrics['status'] = 'struggling'\n                else:\n                    agent_metrics['status'] = 'inactive'\n                \n                agent_data[agent_id] = agent_metrics\n            \n            self.dashboard_data['agents'] = agent_data\n            \n        except Exception as e:\n            logger.error(f\"Agent metrics error: {e}\")\n            self.dashboard_data['agents'] = {'error': str(e)}\n    \n    def _update_circuit_breakers(self) -> None:\n        \"\"\"Update circuit breaker status.\"\"\"\n        try:\n            breaker_summary = self.circuit_manager.get_health_summary()\n            all_stats = self.circuit_manager.get_all_stats()\n            \n            circuit_data = {\n                'summary': breaker_summary,\n                'individual': {\n                    name: {\n                        'state': breaker.state.value,\n                        'total_requests': stats.total_requests,\n                        'failed_requests': stats.failed_requests,\n                        'success_rate': (stats.successful_requests / max(stats.total_requests, 1)) * 100,\n                        'consecutive_failures': stats.consecutive_failures\n                    }\n                    for name, (breaker, stats) in zip(all_stats.keys(), \n                                                     [(self.circuit_manager.get_breaker(name), stats) \n                                                      for name, stats in all_stats.items()])\n                    if breaker is not None\n                },\n                'timestamp': time.time()\n            }\n            \n            self.dashboard_data['circuit_breakers'] = circuit_data\n            \n        except Exception as e:\n            logger.error(f\"Circuit breaker update error: {e}\")\n            self.dashboard_data['circuit_breakers'] = {'error': str(e)}\n    \n    def _check_alerts(self) -> None:\n        \"\"\"Check for alert conditions.\"\"\"\n        current_time = time.time()\n        new_alerts = []\n        \n        try:\n            # System alerts\n            system_data = self.dashboard_data.get('system', {})\n            if 'cpu_usage' in system_data and system_data['cpu_usage'] > 90:\n                self._add_alert('HIGH_CPU', f\"CPU usage: {system_data['cpu_usage']:.1f}%\", current_time)\n            \n            if 'memory_usage' in system_data and system_data['memory_usage'] > 85:\n                self._add_alert('HIGH_MEMORY', f\"Memory usage: {system_data['memory_usage']:.1f}%\", current_time)\n            \n            # Federated learning alerts\n            fed_data = self.dashboard_data.get('federated', {})\n            convergence = fed_data.get('convergence', {})\n            \n            if convergence.get('reward_cv', 0) > 2.0:  # High coefficient of variation\n                self._add_alert('POOR_CONVERGENCE', f\"Reward CV: {convergence.get('reward_cv', 0):.2f}\", current_time)\n            \n            # Circuit breaker alerts\n            cb_data = self.dashboard_data.get('circuit_breakers', {})\n            summary = cb_data.get('summary', {})\n            \n            if summary.get('open_breakers', 0) > 0:\n                self._add_alert('CIRCUIT_BREAKERS_OPEN', \n                              f\"{summary['open_breakers']} circuit breakers open\", current_time)\n            \n            # Agent alerts\n            agent_data = self.dashboard_data.get('agents', {})\n            if isinstance(agent_data, dict):\n                struggling_agents = [aid for aid, data in agent_data.items() \n                                   if isinstance(data, dict) and data.get('status') == 'struggling']\n                \n                if len(struggling_agents) > len(agent_data) * 0.3:  # >30% struggling\n                    self._add_alert('MANY_STRUGGLING_AGENTS', \n                                  f\"{len(struggling_agents)} agents struggling\", current_time)\n        \n        except Exception as e:\n            logger.error(f\"Alert check error: {e}\")\n    \n    def _add_alert(self, alert_type: str, message: str, timestamp: float) -> None:\n        \"\"\"Add an alert if not in cooldown period.\"\"\"\n        last_alert_time = self.last_alert_time.get(alert_type, 0)\n        \n        if timestamp - last_alert_time >= self.config.alert_cooldown:\n            alert = {\n                'type': alert_type,\n                'message': message,\n                'timestamp': timestamp,\n                'severity': self._get_alert_severity(alert_type)\n            }\n            \n            self.alert_history.append(alert)\n            self.last_alert_time[alert_type] = timestamp\n            \n            # Keep only recent alerts in dashboard\n            recent_alerts = [a for a in self.alert_history \n                           if timestamp - a['timestamp'] < 3600]  # Last hour\n            self.dashboard_data['alerts'] = recent_alerts[-50:]  # Max 50 alerts\n            \n            logger.warning(f\"ALERT [{alert_type}]: {message}\")\n    \n    def _get_alert_severity(self, alert_type: str) -> str:\n        \"\"\"Get severity level for alert type.\"\"\"\n        high_severity = ['CIRCUIT_BREAKERS_OPEN', 'SYSTEM_FAILURE']\n        medium_severity = ['HIGH_CPU', 'HIGH_MEMORY', 'POOR_CONVERGENCE']\n        \n        if alert_type in high_severity:\n            return 'high'\n        elif alert_type in medium_severity:\n            return 'medium'\n        else:\n            return 'low'\n    \n    def _update_predictions(self) -> None:\n        \"\"\"Update performance predictions.\"\"\"\n        try:\n            predictions = {}\n            \n            # Predict system resource usage\n            cpu_history = list(self.performance_history['system_cpu_usage'])\n            if len(cpu_history) >= 10:\n                predictions['cpu_usage_10min'] = self._simple_prediction(cpu_history, 10)\n            \n            # Predict convergence rate\n            reward_history = list(self.performance_history['fed_episode_reward_mean'])\n            if len(reward_history) >= 20:\n                predictions['reward_trend'] = self._simple_prediction(reward_history, 5)\n            \n            self.dashboard_data['predictions'] = predictions\n            \n        except Exception as e:\n            logger.error(f\"Prediction error: {e}\")\n            self.dashboard_data['predictions'] = {'error': str(e)}\n    \n    def _simple_prediction(self, history: List[float], steps: int) -> Dict[str, float]:\n        \"\"\"Simple linear prediction.\"\"\"\n        if len(history) < 3:\n            return {'predicted_value': history[-1] if history else 0.0, 'confidence': 0.0}\n        \n        x = np.arange(len(history))\n        y = np.array(history)\n        \n        # Linear regression\n        A = np.vstack([x, np.ones(len(x))]).T\n        slope, intercept = np.linalg.lstsq(A, y, rcond=None)[0]\n        \n        # Predict future value\n        future_x = len(history) + steps - 1\n        predicted_value = slope * future_x + intercept\n        \n        # Simple confidence based on recent variance\n        recent_variance = np.var(history[-10:]) if len(history) >= 10 else np.var(history)\n        confidence = max(0.0, 1.0 - (recent_variance / max(abs(predicted_value), 1.0)))\n        \n        return {\n            'predicted_value': float(predicted_value),\n            'confidence': float(min(confidence, 1.0)),\n            'slope': float(slope)\n        }\n    \n    def get_dashboard_data(self) -> Dict[str, Any]:\n        \"\"\"Get current dashboard data.\"\"\"\n        return self.dashboard_data.copy()\n    \n    def export_dashboard_data(self, format: str = 'json') -> str:\n        \"\"\"Export dashboard data in specified format.\"\"\"\n        data = self.get_dashboard_data()\n        \n        if format == 'json':\n            return json.dumps(data, indent=2, default=str)\n        else:\n            raise ValueError(f\"Unsupported export format: {format}\")\n    \n    def get_alert_summary(self) -> Dict[str, Any]:\n        \"\"\"Get summary of recent alerts.\"\"\"\n        current_time = time.time()\n        recent_alerts = [a for a in self.alert_history \n                        if current_time - a['timestamp'] < 3600]\n        \n        summary = {\n            'total_alerts_1h': len(recent_alerts),\n            'high_severity': len([a for a in recent_alerts if a['severity'] == 'high']),\n            'medium_severity': len([a for a in recent_alerts if a['severity'] == 'medium']),\n            'low_severity': len([a for a in recent_alerts if a['severity'] == 'low']),\n            'most_recent': recent_alerts[-1] if recent_alerts else None\n        }\n        \n        return summary
+        self.dashboard_data = {
+            'system': {},
+            'federated': {},
+            'agents': {},
+            'alerts': [],
+            'circuit_breakers': {},
+            'predictions': {},
+            'metadata': {
+                'last_update': 0,
+                'update_interval': self.config.update_interval,
+                'active_agents': 0
+            }
+        }
+        
+        logger.info("Real-time dashboard initialized")
+    
+    def start(self, metrics_aggregator: FederatedMetricsAggregator) -> None:
+        """Start the real-time dashboard."""
+        if self.active:
+            logger.warning("Dashboard already active")
+            return
+            
+        self.metrics_aggregator = metrics_aggregator
+        self.active = True
+        self.stop_event.clear()
+        
+        # Start update thread
+        self.update_thread = threading.Thread(target=self._update_loop, daemon=True)
+        self.update_thread.start()
+        
+        logger.info("Real-time dashboard started")
+    
+    def stop(self) -> None:
+        """Stop the real-time dashboard."""
+        if not self.active:
+            return
+            
+        self.active = False
+        self.stop_event.set()
+        
+        if self.update_thread and self.update_thread.is_alive():
+            self.update_thread.join(timeout=5.0)
+            
+        logger.info("Real-time dashboard stopped")
+    
+    def _update_loop(self) -> None:
+        """Main update loop for dashboard."""
+        while self.active and not self.stop_event.wait(self.config.update_interval):
+            try:
+                self._update_dashboard_data()
+            except Exception as e:
+                logger.error(f"Dashboard update error: {e}")
+    
+    def _update_dashboard_data(self) -> None:
+        """Update all dashboard data."""
+        current_time = time.time()
+        
+        # Update system metrics
+        self._update_system_metrics()
+        
+        # Update federated learning metrics
+        self._update_federated_metrics()
+        
+        # Update agent-specific metrics
+        self._update_agent_metrics()
+        
+        # Update circuit breaker status
+        self._update_circuit_breakers()
+        
+        # Check for alerts
+        self._check_alerts()
+        
+        # Generate predictions if enabled
+        if self.config.enable_predictions:
+            self._update_predictions()
+        
+        # Update metadata
+        self.dashboard_data['metadata'].update({
+            'last_update': current_time,
+            'active_agents': len(self.metrics_aggregator.agent_collectors) if self.metrics_aggregator else 0
+        })
+        
+        self.last_update = current_time
+    
+    def _update_system_metrics(self) -> None:
+        """Update system-wide metrics."""
+        try:
+            import psutil
+            
+            # CPU and memory
+            cpu_percent = psutil.cpu_percent(interval=0.1)
+            memory = psutil.virtual_memory()
+            disk = psutil.disk_usage('/')
+            
+            # Network I/O
+            net_io = psutil.net_io_counters()
+            
+            system_data = {
+                'cpu_usage': cpu_percent,
+                'memory_usage': memory.percent,
+                'memory_available_gb': memory.available / (1024**3),
+                'disk_usage': disk.percent,
+                'network_bytes_sent': net_io.bytes_sent,
+                'network_bytes_recv': net_io.bytes_recv,
+                'timestamp': time.time()
+            }
+            
+            # Track history
+            for key, value in system_data.items():
+                if key != 'timestamp':
+                    self.performance_history[f'system_{key}'].append(value)
+            
+            self.dashboard_data['system'] = system_data
+            
+        except ImportError:
+            logger.warning("psutil not available for system metrics")
+            self.dashboard_data['system'] = {'error': 'psutil not available'}
+        except Exception as e:
+            logger.error(f"System metrics error: {e}")
+            self.dashboard_data['system'] = {'error': str(e)}
+    
+    def _update_federated_metrics(self) -> None:
+        """Update federated learning metrics."""
+        if not self.metrics_aggregator:
+            return
+            
+        try:
+            # Key federated metrics
+            convergence_metrics = self.metrics_aggregator.get_convergence_metrics()
+            
+            # Aggregate important metrics across agents
+            key_metrics = ['episode_reward', 'loss', 'gradient_norm', 'episode_duration']
+            aggregated_data = {}
+            
+            for metric in key_metrics:
+                agg = self.metrics_aggregator.aggregate_metric(metric)
+                if agg:
+                    aggregated_data[metric] = {
+                        'mean': agg.mean,
+                        'std': agg.std,
+                        'min': agg.min,
+                        'max': agg.max,
+                        'count': agg.count
+                    }
+                    
+                    # Track history
+                    self.performance_history[f'fed_{metric}_mean'].append(agg.mean)
+            
+            federated_data = {
+                'convergence': convergence_metrics,
+                'aggregated_metrics': aggregated_data,
+                'global_stats': {
+                    'total_episodes': sum(len(collector.get_recent_values('episode_reward', 1000)) 
+                                        for collector in self.metrics_aggregator.agent_collectors.values()),
+                    'active_agents': len(self.metrics_aggregator.agent_collectors)
+                },
+                'timestamp': time.time()
+            }
+            
+            self.dashboard_data['federated'] = federated_data
+            
+        except Exception as e:
+            logger.error(f"Federated metrics error: {e}")
+            self.dashboard_data['federated'] = {'error': str(e)}
+    
+    def _update_agent_metrics(self) -> None:
+        """Update individual agent metrics."""
+        if not self.metrics_aggregator:
+            return
+            
+        try:
+            agent_data = {}
+            
+            for agent_id, collector in self.metrics_aggregator.agent_collectors.items():
+                if len(agent_data) >= self.config.max_agents_display:
+                    break
+                    
+                # Recent performance
+                recent_rewards = collector.get_recent_values('episode_reward', 10)
+                recent_losses = collector.get_recent_values('loss', 50)
+                
+                agent_metrics = {
+                    'id': agent_id,
+                    'recent_reward': np.mean(recent_rewards) if recent_rewards else 0.0,
+                    'reward_trend': collector.get_trend('episode_reward', 50),
+                    'recent_loss': np.mean(recent_losses) if recent_losses else 0.0,
+                    'episode_count': len(collector.get_recent_values('episode_reward', 1000)),
+                    'last_update': time.time()
+                }
+                
+                # Health status
+                if recent_rewards:
+                    agent_metrics['status'] = 'active'
+                    if np.mean(recent_rewards) < -1000:  # Threshold for poor performance
+                        agent_metrics['status'] = 'struggling'
+                else:
+                    agent_metrics['status'] = 'inactive'
+                
+                agent_data[agent_id] = agent_metrics
+            
+            self.dashboard_data['agents'] = agent_data
+            
+        except Exception as e:
+            logger.error(f"Agent metrics error: {e}")
+            self.dashboard_data['agents'] = {'error': str(e)}
+    
+    def _update_circuit_breakers(self) -> None:
+        """Update circuit breaker status."""
+        try:
+            breaker_summary = self.circuit_manager.get_health_summary()
+            all_stats = self.circuit_manager.get_all_stats()
+            
+            circuit_data = {
+                'summary': breaker_summary,
+                'individual': {
+                    name: {
+                        'state': breaker.state.value,
+                        'total_requests': stats.total_requests,
+                        'failed_requests': stats.failed_requests,
+                        'success_rate': (stats.successful_requests / max(stats.total_requests, 1)) * 100,
+                        'consecutive_failures': stats.consecutive_failures
+                    }
+                    for name, (breaker, stats) in zip(all_stats.keys(), 
+                                                     [(self.circuit_manager.get_breaker(name), stats) 
+                                                      for name, stats in all_stats.items()])
+                    if breaker is not None
+                },
+                'timestamp': time.time()
+            }
+            
+            self.dashboard_data['circuit_breakers'] = circuit_data
+            
+        except Exception as e:
+            logger.error(f"Circuit breaker update error: {e}")
+            self.dashboard_data['circuit_breakers'] = {'error': str(e)}
+    
+    def _check_alerts(self) -> None:
+        """Check for alert conditions."""
+        current_time = time.time()
+        new_alerts = []
+        
+        try:
+            # System alerts
+            system_data = self.dashboard_data.get('system', {})
+            if 'cpu_usage' in system_data and system_data['cpu_usage'] > 90:
+                self._add_alert('HIGH_CPU', f"CPU usage: {system_data['cpu_usage']:.1f}%", current_time)
+            
+            if 'memory_usage' in system_data and system_data['memory_usage'] > 85:
+                self._add_alert('HIGH_MEMORY', f"Memory usage: {system_data['memory_usage']:.1f}%", current_time)
+            
+            # Federated learning alerts
+            fed_data = self.dashboard_data.get('federated', {})
+            convergence = fed_data.get('convergence', {})
+            
+            if convergence.get('reward_cv', 0) > 2.0:  # High coefficient of variation
+                self._add_alert('POOR_CONVERGENCE', f"Reward CV: {convergence.get('reward_cv', 0):.2f}", current_time)
+            
+            # Circuit breaker alerts
+            cb_data = self.dashboard_data.get('circuit_breakers', {})
+            summary = cb_data.get('summary', {})
+            
+            if summary.get('open_breakers', 0) > 0:
+                self._add_alert('CIRCUIT_BREAKERS_OPEN', 
+                              f"{summary['open_breakers']} circuit breakers open", current_time)
+            
+            # Agent alerts
+            agent_data = self.dashboard_data.get('agents', {})
+            if isinstance(agent_data, dict):
+                struggling_agents = [aid for aid, data in agent_data.items() 
+                                   if isinstance(data, dict) and data.get('status') == 'struggling']
+                
+                if len(struggling_agents) > len(agent_data) * 0.3:  # >30% struggling
+                    self._add_alert('MANY_STRUGGLING_AGENTS', 
+                                  f"{len(struggling_agents)} agents struggling", current_time)
+        
+        except Exception as e:
+            logger.error(f"Alert check error: {e}")
+    
+    def _add_alert(self, alert_type: str, message: str, timestamp: float) -> None:
+        """Add an alert if not in cooldown period."""
+        last_alert_time = self.last_alert_time.get(alert_type, 0)
+        
+        if timestamp - last_alert_time >= self.config.alert_cooldown:
+            alert = {
+                'type': alert_type,
+                'message': message,
+                'timestamp': timestamp,
+                'severity': self._get_alert_severity(alert_type)
+            }
+            
+            self.alert_history.append(alert)
+            self.last_alert_time[alert_type] = timestamp
+            
+            # Keep only recent alerts in dashboard
+            recent_alerts = [a for a in self.alert_history 
+                           if timestamp - a['timestamp'] < 3600]  # Last hour
+            self.dashboard_data['alerts'] = recent_alerts[-50:]  # Max 50 alerts
+            
+            logger.warning(f"ALERT [{alert_type}]: {message}")
+    
+    def _get_alert_severity(self, alert_type: str) -> str:
+        """Get severity level for alert type."""
+        high_severity = ['CIRCUIT_BREAKERS_OPEN', 'SYSTEM_FAILURE']
+        medium_severity = ['HIGH_CPU', 'HIGH_MEMORY', 'POOR_CONVERGENCE']
+        
+        if alert_type in high_severity:
+            return 'high'
+        elif alert_type in medium_severity:
+            return 'medium'
+        else:
+            return 'low'
+    
+    def _update_predictions(self) -> None:
+        """Update performance predictions."""
+        try:
+            predictions = {}
+            
+            # Predict system resource usage
+            cpu_history = list(self.performance_history['system_cpu_usage'])
+            if len(cpu_history) >= 10:
+                predictions['cpu_usage_10min'] = self._simple_prediction(cpu_history, 10)
+            
+            # Predict convergence rate
+            reward_history = list(self.performance_history['fed_episode_reward_mean'])
+            if len(reward_history) >= 20:
+                predictions['reward_trend'] = self._simple_prediction(reward_history, 5)
+            
+            self.dashboard_data['predictions'] = predictions
+            
+        except Exception as e:
+            logger.error(f"Prediction error: {e}")
+            self.dashboard_data['predictions'] = {'error': str(e)}
+    
+    def _simple_prediction(self, history: List[float], steps: int) -> Dict[str, float]:
+        """Simple linear prediction."""
+        if len(history) < 3:
+            return {'predicted_value': history[-1] if history else 0.0, 'confidence': 0.0}
+        
+        x = np.arange(len(history))
+        y = np.array(history)
+        
+        # Linear regression
+        A = np.vstack([x, np.ones(len(x))]).T
+        slope, intercept = np.linalg.lstsq(A, y, rcond=None)[0]
+        
+        # Predict future value
+        future_x = len(history) + steps - 1
+        predicted_value = slope * future_x + intercept
+        
+        # Simple confidence based on recent variance
+        recent_variance = np.var(history[-10:]) if len(history) >= 10 else np.var(history)
+        confidence = max(0.0, 1.0 - (recent_variance / max(abs(predicted_value), 1.0)))
+        
+        return {
+            'predicted_value': float(predicted_value),
+            'confidence': float(min(confidence, 1.0)),
+            'slope': float(slope)
+        }
+    
+    def get_dashboard_data(self) -> Dict[str, Any]:
+        """Get current dashboard data."""
+        return self.dashboard_data.copy()
+    
+    def export_dashboard_data(self, format: str = 'json') -> str:
+        """Export dashboard data in specified format."""
+        data = self.get_dashboard_data()
+        
+        if format == 'json':
+            return json.dumps(data, indent=2, default=str)
+        else:
+            raise ValueError(f"Unsupported export format: {format}")
+    
+    def get_alert_summary(self) -> Dict[str, Any]:
+        """Get summary of recent alerts."""
+        current_time = time.time()
+        recent_alerts = [a for a in self.alert_history 
+                        if current_time - a['timestamp'] < 3600]
+        
+        summary = {
+            'total_alerts_1h': len(recent_alerts),
+            'high_severity': len([a for a in recent_alerts if a['severity'] == 'high']),
+            'medium_severity': len([a for a in recent_alerts if a['severity'] == 'medium']),
+            'low_severity': len([a for a in recent_alerts if a['severity'] == 'low']),
+            'most_recent': recent_alerts[-1] if recent_alerts else None
+        }
+        
+        return summary

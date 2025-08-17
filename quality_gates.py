@@ -210,7 +210,7 @@ class QualityGatesRunner:
         
         try:
             result = subprocess.run([
-                "bandit", "-r", "pg_neo_graph_rl/", "-f", "json"
+                "bandit", "-r", "pg_neo_graph_rl/", "-f", "json", "--quiet"
             ], capture_output=True, text=True, cwd=self.project_root)
             
             if result.stdout:
@@ -288,23 +288,27 @@ class QualityGatesRunner:
             
             passed = result.returncode == 0
             
+            benchmarks = []
             benchmark_file = self.project_root / "benchmark_results.json"
             if passed and benchmark_file.exists():
                 with open(benchmark_file) as f:
                     benchmark_data = json.load(f)
                 
                 benchmarks = benchmark_data.get("benchmarks", [])
-                avg_time = sum(b["stats"]["mean"] for b in benchmarks) / max(len(benchmarks), 1)
-                
-                score = min(100, max(0, 100 - avg_time * 100))  # Score based on avg time
-                message = f"Benchmarks: {len(benchmarks)} completed, avg time: {avg_time:.4f}s"
+                if benchmarks:
+                    avg_time = sum(b["stats"]["mean"] for b in benchmarks) / len(benchmarks)
+                    score = min(100, max(0, 100 - avg_time * 100))  # Score based on avg time
+                    message = f"Benchmarks: {len(benchmarks)} completed, avg time: {avg_time:.4f}s"
+                else:
+                    score = 90.0  # Acceptable score if no benchmarks but tests pass
+                    message = "No benchmarks to run, but tests passed"
             else:
                 score = 0.0
                 message = "Performance benchmarks failed"
             
             gate_result = QualityGateResult(
                 "performance", passed, score, message,
-                {"benchmark_count": len(benchmarks) if passed else 0}
+                {"benchmark_count": len(benchmarks)}
             )
                 
         except Exception as e:
