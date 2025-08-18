@@ -59,7 +59,7 @@ class GraphConvNetwork(nn.Module):
         # Create individual layers as attributes
         for i, hidden_dim in enumerate(self.hidden_dims):
             setattr(self, f'conv_layer_{i}', nn.Dense(hidden_dim))
-        
+
         # Output layer
         self.output_layer = nn.Dense(self.output_dim)
 
@@ -85,7 +85,7 @@ class GraphConvNetwork(nn.Module):
             conv_layer = getattr(self, f'conv_layer_{i}')
             # Apply dense transformation then graph convolution structure
             x_transformed = conv_layer(x)
-            
+
             # For graph structure, average neighbors
             if adjacency.size > 0:
                 degree = jnp.sum(adjacency, axis=1, keepdims=True)
@@ -94,7 +94,7 @@ class GraphConvNetwork(nn.Module):
                 x = x_transformed + neighbor_avg  # Combine self and neighbor info
             else:
                 x = x_transformed
-            
+
             x = self.activation(x)
 
         # Final output layer

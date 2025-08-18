@@ -1,6 +1,7 @@
 """
 Custom exceptions for pg-neo-graph-rl.
 """
+from typing import Optional
 
 
 class GraphRLError(Exception):
@@ -11,7 +12,7 @@ class GraphRLError(Exception):
 class FederatedLearningError(GraphRLError):
     """Raised when federated learning operations fail."""
 
-    def __init__(self, message: str, agent_id: int = None, round_number: int = None):
+    def __init__(self, message: str, agent_id: Optional[int] = None, round_number: Optional[int] = None):
         self.agent_id = agent_id
         self.round_number = round_number
 

@@ -29,7 +29,8 @@ import numpy as np
 import pandas as pd
 from scipy import stats
 
-from ..core.types import FederatedGraphRL, GraphState
+from ..core.federated import FederatedGraphRL
+from ..core.types import GraphState
 from ..environments.power_grid import PowerGridEnvironment
 from ..environments.swarm import SwarmEnvironment
 from ..environments.traffic import TrafficEnvironment

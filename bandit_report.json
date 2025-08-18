@@ -1,3 +1,4 @@
+Working... ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:02
 {
   "errors": [
     {
@@ -13,7 +14,7 @@
       "reason": "syntax error while parsing AST from file"
     }
   ],
-  "generated_at": "2025-08-16T20:01:15Z",
+  "generated_at": "2025-08-17T21:56:08Z",
   "metrics": {
     "_totals": {
       "CONFIDENCE.HIGH": 9,
@@ -24,7 +25,7 @@
       "SEVERITY.LOW": 4,
       "SEVERITY.MEDIUM": 3,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 14895,
+      "loc": 14896,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -63,7 +64,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 387,
+      "loc": 382,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -167,7 +168,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 388,
+      "loc": 395,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -315,7 +316,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 194,
+      "loc": 186,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -520,7 +521,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 588,
+      "loc": 589,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -754,7 +755,7 @@
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 139,
+      "loc": 145,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -773,6 +774,26 @@
     }
   },
   "results": [
+    {
+      "code": "4 import hashlib\n5 import pickle\n6 import threading\n",
+      "col_offset": 0,
+      "end_col_offset": 13,
+      "filename": "pg_neo_graph_rl/optimization/advanced_cache.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 502,
+        "link": "https://cwe.mitre.org/data/definitions/502.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Consider possible security implications associated with pickle module.",
+      "line_number": 5,
+      "line_range": [
+        5
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/blacklists/blacklist_imports.html#b403-import-pickle",
+      "test_id": "B403",
+      "test_name": "blacklist"
+    },
     {
       "code": "361         # Create hash of graph structure and features\n362         nodes_hash = hashlib.md5(graph_state.nodes.tobytes()).hexdigest()[:8]\n363         edges_hash = hashlib.md5(graph_state.edges.tobytes()).hexdigest()[:8]\n",
       "col_offset": 21,
@@ -814,6 +835,26 @@
       "test_name": "hashlib"
     },
     {
+      "code": "3 \"\"\"\n4 import pickle\n5 import time\n",
+      "col_offset": 0,
+      "end_col_offset": 13,
+      "filename": "pg_neo_graph_rl/training/trainer.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 502,
+        "link": "https://cwe.mitre.org/data/definitions/502.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Consider possible security implications associated with pickle module.",
+      "line_number": 4,
+      "line_range": [
+        4
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/blacklists/blacklist_imports.html#b403-import-pickle",
+      "test_id": "B403",
+      "test_name": "blacklist"
+    },
+    {
       "code": "362         with open(checkpoint_path, 'rb') as f:\n363             checkpoint_data = pickle.load(f)\n364 \n",
       "col_offset": 30,
       "end_col_offset": 44,
@@ -831,6 +872,26 @@
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/blacklists/blacklist_calls.html#b301-pickle",
       "test_id": "B301",
+      "test_name": "blacklist"
+    },
+    {
+      "code": "7 import json\n8 import pickle\n9 import shutil\n",
+      "col_offset": 0,
+      "end_col_offset": 13,
+      "filename": "pg_neo_graph_rl/utils/backup.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 502,
+        "link": "https://cwe.mitre.org/data/definitions/502.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Consider possible security implications associated with pickle module.",
+      "line_number": 8,
+      "line_range": [
+        8
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/blacklists/blacklist_imports.html#b403-import-pickle",
+      "test_id": "B403",
       "test_name": "blacklist"
     },
     {
@@ -871,6 +932,26 @@
       ],
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/blacklists/blacklist_calls.html#b301-pickle",
       "test_id": "B301",
+      "test_name": "blacklist"
+    },
+    {
+      "code": "207                         import random\n208                         delay *= (0.5 + 0.5 * random.random())\n209 \n",
+      "col_offset": 46,
+      "end_col_offset": 61,
+      "filename": "pg_neo_graph_rl/utils/fault_tolerance.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 330,
+        "link": "https://cwe.mitre.org/data/definitions/330.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Standard pseudo-random generators are not suitable for security/cryptographic purposes.",
+      "line_number": 208,
+      "line_range": [
+        208
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/blacklists/blacklist_calls.html#b311-random",
+      "test_id": "B311",
       "test_name": "blacklist"
     }
   ]

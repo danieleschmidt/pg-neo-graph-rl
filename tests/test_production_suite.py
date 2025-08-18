@@ -15,8 +15,66 @@ import types
 # Mock JAX
 jax = types.ModuleType('jax')
 jax.numpy = np
+# Create a custom jnp module that handles .at properly
+class MockJNP:
+    def __getattr__(self, name):
+        # For most attributes, delegate to numpy
+        if hasattr(np, name):
+            attr = getattr(np, name)
+            if callable(attr):
+                def wrapper(*args, **kwargs):
+                    result = attr(*args, **kwargs)
+                    # Return MockArray for array results
+                    if isinstance(result, np.ndarray):
+                        return MockArray(result)
+                    return result
+                return wrapper
+            return attr
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+    
+    # Specific overrides
+    def asarray(self, a, dtype=None):
+        result = np.asarray(a, dtype=dtype)
+        return MockArray(result)
+    
+    def array(self, a, dtype=None):
+        result = np.array(a, dtype=dtype)
+        return MockArray(result)
+    
+    def diag_indices(self, n):
+        return np.diag_indices(n)
+
+class MockArray(np.ndarray):
+    def __new__(cls, input_array):
+        obj = np.asarray(input_array).view(cls)
+        return obj
+    
+    @property
+    def at(self):
+        class AtProperty:
+            def __init__(self, array):
+                self.array = array
+            
+            def __getitem__(self, key):
+                class SetProperty:
+                    def __init__(self, array, key):
+                        self.array = array
+                        self.key = key
+                    
+                    def set(self, value):
+                        result = self.array.copy()
+                        result[self.key] = value
+                        return MockArray(result)
+                
+                return SetProperty(self.array, key)
+        
+        return AtProperty(self)
+
+jnp = MockJNP()
 jax.random = types.ModuleType('random')
 jax.random.PRNGKey = lambda x: np.array([x])
+jax.random.uniform = lambda key, shape=(), minval=0.0, maxval=1.0: np.random.uniform(minval, maxval, shape) if shape != () else np.random.uniform(minval, maxval)
+jax.random.split = lambda key, num=2: [np.array([i]) for i in range(num)]
 jax.devices = lambda: ['cpu(id=0)']
 jax.jit = lambda func: func
 jax.nn = types.ModuleType('nn')
@@ -42,7 +100,17 @@ gym = types.ModuleType('gymnasium')
 sys.modules['gymnasium'] = gym
 
 pydantic = types.ModuleType('pydantic')
-pydantic.BaseModel = object
+
+class MockBaseModel:
+    def __init__(self, **kwargs):
+        for key, value in kwargs.items():
+            setattr(self, key, value)
+    
+    def __repr__(self):
+        attrs = [f"{k}={v}" for k, v in self.__dict__.items()]
+        return " ".join(attrs)
+
+pydantic.BaseModel = MockBaseModel
 pydantic.Field = lambda **kwargs: None
 sys.modules['pydantic'] = pydantic
 
@@ -102,7 +170,8 @@ class TestCoreComponents:
             [0, 0, 0, 0, 0]
         ])
         
-        state = GraphState(nodes=nodes, edges=edges, adjacency=adjacency)
+        edge_attr = jnp.ones((edges.shape[0], 1))
+        state = GraphState(nodes=nodes, edges=edges, edge_attr=edge_attr, adjacency=adjacency)
         
         # Should not raise exception
         try:
@@ -123,8 +192,13 @@ class TestCoreComponents:
         }
         
         try:
-            fed_rl = FederatedGraphRL(config)
-            assert hasattr(fed_rl, 'num_agents')
+            fed_rl = FederatedGraphRL(
+                num_agents=5,
+                aggregation='gossip',
+                communication_rounds=10
+            )
+            assert hasattr(fed_rl, 'config')
+            assert fed_rl.config.num_agents == 5
             initialization_successful = True
         except Exception as e:
             print(f"Initialization error: {e}")
@@ -309,7 +383,8 @@ class TestOptimization:
         adjacency = np.eye(100)
         edges = np.array([[0, 1], [1, 2]])
         
-        state = GraphState(nodes=nodes, edges=edges, adjacency=adjacency)
+        edge_attr = jnp.ones((edges.shape[0], 1))
+        state = GraphState(nodes=nodes, edges=edges, edge_attr=edge_attr, adjacency=adjacency)
         
         # Optimize state
         optimized_state = optimizer.optimize_graph_state(state)
@@ -372,7 +447,8 @@ class TestPerformance:
             edges = np.random.randint(0, 50, (100, 2))
             adjacency = np.random.rand(50, 50)
             
-            state = GraphState(nodes=nodes, edges=edges, adjacency=adjacency)
+            edge_attr = jnp.ones((edges.shape[0], 1))
+        state = GraphState(nodes=nodes, edges=edges, edge_attr=edge_attr, adjacency=adjacency)
         
         duration = time.time() - start_time
         
@@ -442,7 +518,8 @@ class TestSecurity:
             edges = np.array([[0, 1]])
             adjacency = np.eye(10)
             
-            state = GraphState(nodes=nodes, edges=edges, adjacency=adjacency)
+            edge_attr = jnp.ones((edges.shape[0], 1))
+            state = GraphState(nodes=nodes, edges=edges, edge_attr=edge_attr, adjacency=adjacency)
             validate_graph_state(state)
     
     def test_large_input_handling(self):
@@ -456,7 +533,8 @@ class TestSecurity:
             adjacency = np.eye(10000)  # Large adjacency matrix
             edges = np.random.randint(0, 10000, (50000, 2))  # Many edges
             
-            state = GraphState(nodes=nodes, edges=edges, adjacency=adjacency)
+            edge_attr = jnp.ones((edges.shape[0], 1))
+            state = GraphState(nodes=nodes, edges=edges, edge_attr=edge_attr, adjacency=adjacency)
             
             # This should either work or fail gracefully
             large_input_handled = True

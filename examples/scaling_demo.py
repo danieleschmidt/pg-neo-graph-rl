@@ -156,7 +156,6 @@ def main():
             future = concurrent_trainer.submit_training_task(
                 agent_id=i,
                 training_function=agent_training_task,
-                agent_id=i,
                 agent=agent
             )
             training_futures.append(future)
