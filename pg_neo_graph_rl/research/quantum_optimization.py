@@ -24,7 +24,7 @@ import networkx as nx
 import numpy as np
 import optax
 
-from ..core.types import FederatedGraphRL
+from ..core.federated import FederatedGraphRL
 
 
 class QuantumState(NamedTuple):

@@ -26,7 +26,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from ..core.types import FederatedGraphRL, GraphState
+from ..core.federated import FederatedGraphRL
+from ..core.types import GraphState
 
 
 class PerformanceMetrics(NamedTuple):
