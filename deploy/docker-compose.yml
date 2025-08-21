@@ -1,0 +1,142 @@
+version: '3.8'
+
+services:
+  # Main application
+  pg-neo-graph-rl:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    ports:
+      - "8080:8080"  # Main API
+      - "8090:8090"  # Monitoring dashboard
+    environment:
+      - ENV=production
+      - WORKERS=4
+      - LOG_LEVEL=info
+      - MONITORING_ENABLED=true
+      - SECURITY_ENABLED=true
+    volumes:
+      - ../data:/app/data
+      - ../logs:/app/logs
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - pg-neo-network
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - pg-neo-network
+    command: redis-server --appendonly yes --maxmemory 1gb --maxmemory-policy allkeys-lru
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # PostgreSQL for metadata storage
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: pg_neo_graph_rl
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: secure_password_change_in_production
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../deploy/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - pg-neo-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../deploy/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    networks:
+      - pg-neo-network
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin_change_in_production
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../deploy/grafana-dashboards:/etc/grafana/provisioning/dashboards
+      - ../deploy/grafana-datasources:/etc/grafana/provisioning/datasources
+    networks:
+      - pg-neo-network
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # Load balancer
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../deploy/nginx.conf:/etc/nginx/nginx.conf
+      - ../deploy/ssl:/etc/nginx/ssl
+    networks:
+      - pg-neo-network
+    depends_on:
+      - pg-neo-graph-rl
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  postgres_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  pg-neo-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

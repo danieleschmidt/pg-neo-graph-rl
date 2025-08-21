@@ -319,7 +319,9 @@ class NeuralArchitectureSearch:
     def quick_evaluation(self, network, task, num_episodes):
         """Quick evaluation of network on task."""
         # Simplified evaluation for demonstration
-        return {'reward': jnp.random.normal(0.7, 0.1), 'efficiency': jnp.random.normal(0.8, 0.1)}
+        key = jax.random.PRNGKey(42)
+        key1, key2 = jax.random.split(key)
+        return {'reward': jax.random.normal(key1, ()) * 0.1 + 0.7, 'efficiency': jax.random.normal(key2, ()) * 0.1 + 0.8}
 
     def calculate_architecture_complexity(self, architecture: ArchitectureGene) -> float:
         """Calculate complexity score for architecture."""

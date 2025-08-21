@@ -1,31 +1,17 @@
-Working... ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 100% 0:00:02
 {
-  "errors": [
-    {
-      "filename": "pg_neo_graph_rl/monitoring/real_time_dashboard.py",
-      "reason": "syntax error while parsing AST from file"
-    },
-    {
-      "filename": "pg_neo_graph_rl/optimization/auto_scaling.py",
-      "reason": "syntax error while parsing AST from file"
-    },
-    {
-      "filename": "pg_neo_graph_rl/optimization/distributed_compute.py",
-      "reason": "syntax error while parsing AST from file"
-    }
-  ],
-  "generated_at": "2025-08-17T21:56:08Z",
+  "errors": [],
+  "generated_at": "2025-08-21T01:05:57Z",
   "metrics": {
     "_totals": {
-      "CONFIDENCE.HIGH": 9,
+      "CONFIDENCE.HIGH": 10,
       "CONFIDENCE.LOW": 0,
       "CONFIDENCE.MEDIUM": 0,
       "CONFIDENCE.UNDEFINED": 0,
       "SEVERITY.HIGH": 2,
-      "SEVERITY.LOW": 4,
+      "SEVERITY.LOW": 5,
       "SEVERITY.MEDIUM": 3,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 14896,
+      "loc": 18321,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -290,7 +276,15 @@ Working... ━━━━━━━━━━━━━━━━━━━━━━━
       "skipped_tests": 0
     },
     "pg_neo_graph_rl/monitoring/real_time_dashboard.py": {
-      "loc": 34,
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 313,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -373,6 +367,14 @@ Working... ━━━━━━━━━━━━━━━━━━━━━━━
       "skipped_tests": 0
     },
     "pg_neo_graph_rl/optimization/auto_scaling.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
       "loc": 460,
       "nosec": 0,
       "skipped_tests": 0
@@ -391,7 +393,15 @@ Working... ━━━━━━━━━━━━━━━━━━━━━━━
       "skipped_tests": 0
     },
     "pg_neo_graph_rl/optimization/distributed_compute.py": {
-      "loc": 2,
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 424,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -482,7 +492,20 @@ Working... ━━━━━━━━━━━━━━━━━━━━━━━
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 480,
+      "loc": 482,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "pg_neo_graph_rl/research/causal_architecture_search.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 511,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -525,6 +548,19 @@ Working... ━━━━━━━━━━━━━━━━━━━━━━━
       "nosec": 0,
       "skipped_tests": 0
     },
+    "pg_neo_graph_rl/research/experimental_validation_framework.py": {
+      "CONFIDENCE.HIGH": 1,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 1,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 609,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
     "pg_neo_graph_rl/research/multimodal_fusion.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
@@ -551,6 +587,19 @@ Working... ━━━━━━━━━━━━━━━━━━━━━━━
       "nosec": 0,
       "skipped_tests": 0
     },
+    "pg_neo_graph_rl/research/neuromorphic_quantum_hybrid.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 433,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
     "pg_neo_graph_rl/research/performance_optimization.py": {
       "CONFIDENCE.HIGH": 0,
       "CONFIDENCE.LOW": 0,
@@ -560,7 +609,33 @@ Working... ━━━━━━━━━━━━━━━━━━━━━━━
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 664,
+      "loc": 665,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "pg_neo_graph_rl/research/publication_benchmarking_suite.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 784,
+      "nosec": 0,
+      "skipped_tests": 0
+    },
+    "pg_neo_graph_rl/research/quantum_causal_federated_learning.py": {
+      "CONFIDENCE.HIGH": 0,
+      "CONFIDENCE.LOW": 0,
+      "CONFIDENCE.MEDIUM": 0,
+      "CONFIDENCE.UNDEFINED": 0,
+      "SEVERITY.HIGH": 0,
+      "SEVERITY.LOW": 0,
+      "SEVERITY.MEDIUM": 0,
+      "SEVERITY.UNDEFINED": 0,
+      "loc": 383,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -703,7 +778,7 @@ Working... ━━━━━━━━━━━━━━━━━━━━━━━
       "SEVERITY.LOW": 0,
       "SEVERITY.MEDIUM": 0,
       "SEVERITY.UNDEFINED": 0,
-      "loc": 125,
+      "loc": 126,
       "nosec": 0,
       "skipped_tests": 0
     },
@@ -833,6 +908,27 @@ Working... ━━━━━━━━━━━━━━━━━━━━━━━
       "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b324_hashlib.html",
       "test_id": "B324",
       "test_name": "hashlib"
+    },
+    {
+      "code": "536                     discovered_edges.add((cause_idx, effect_idx))\n537                 except:\n538                     pass  # Skip if can't parse\n539         \n",
+      "col_offset": 16,
+      "end_col_offset": 24,
+      "filename": "pg_neo_graph_rl/research/experimental_validation_framework.py",
+      "issue_confidence": "HIGH",
+      "issue_cwe": {
+        "id": 703,
+        "link": "https://cwe.mitre.org/data/definitions/703.html"
+      },
+      "issue_severity": "LOW",
+      "issue_text": "Try, Except, Pass detected.",
+      "line_number": 537,
+      "line_range": [
+        537,
+        538
+      ],
+      "more_info": "https://bandit.readthedocs.io/en/1.8.6/plugins/b110_try_except_pass.html",
+      "test_id": "B110",
+      "test_name": "try_except_pass"
     },
     {
       "code": "3 \"\"\"\n4 import pickle\n5 import time\n",
