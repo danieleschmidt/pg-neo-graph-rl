@@ -184,3 +184,19 @@ class BackupError(GraphRLError):
             full_message += f" (Checkpoint: {checkpoint})"
 
         super().__init__(full_message)
+
+
+class DistributedComputeError(GraphRLError):
+    """Raised when distributed computing operations fail."""
+
+    def __init__(self, message: str, node_id: str = None, task_id: str = None):
+        self.node_id = node_id
+        self.task_id = task_id
+
+        full_message = message
+        if node_id:
+            full_message = f"[Node {node_id}] {message}"
+        if task_id:
+            full_message += f" (Task: {task_id})"
+
+        super().__init__(full_message)
