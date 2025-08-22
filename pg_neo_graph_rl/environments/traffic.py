@@ -62,6 +62,20 @@ class TrafficEnvironment:
 
     def step(self, actions: jnp.ndarray) -> Tuple[GraphState, jnp.ndarray, bool, Dict[str, Any]]:
         """Take environment step with traffic light actions."""
+        # Validate actions
+        if not isinstance(actions, jnp.ndarray):
+            raise ValueError("Actions must be JAX array")
+        
+        if len(actions) != len(self.graph.nodes()):
+            raise ValueError(f"Expected {len(self.graph.nodes())} actions, got {len(actions)}")
+        
+        # Check for invalid action values
+        if jnp.any(jnp.isnan(actions)) or jnp.any(jnp.isinf(actions)):
+            raise ValueError("Actions contain NaN or infinite values")
+        
+        if jnp.any(actions < 0) or jnp.any(actions > 100):  # Reasonable bounds
+            raise ValueError("Actions must be in range [0, 100]")
+        
         # Actions: traffic light timing (0=short, 1=medium, 2=long green)
         self.timestep += 1
 

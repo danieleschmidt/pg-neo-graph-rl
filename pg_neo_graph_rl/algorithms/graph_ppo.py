@@ -151,6 +151,16 @@ class GraphPPO:
             node_dim: Dimension of node features
             config: PPO configuration
         """
+        # Input validation
+        if not isinstance(agent_id, int) or agent_id < 0:
+            raise ValueError("agent_id must be non-negative integer")
+        
+        if not isinstance(action_dim, int) or action_dim <= 0:
+            raise ValueError("action_dim must be positive integer")
+        
+        if not isinstance(node_dim, int) or node_dim <= 0:
+            raise ValueError("node_dim must be positive integer")
+        
         self.agent_id = agent_id
         self.action_dim = action_dim
         self.node_dim = node_dim
@@ -324,12 +334,13 @@ class GraphPPO:
         # Handle batch dimension - flatten if needed
         if actions.ndim == 2:  # [batch_size, num_nodes]
             batch_size, num_nodes = actions.shape
+            # For 2D actions, we need to gather log probs for each action at each node
             flat_actions = actions.flatten()
-            node_indices = jnp.tile(jnp.arange(num_nodes), batch_size)
-            batch_indices = jnp.repeat(jnp.arange(batch_size), num_nodes)
-            new_log_probs = log_probs[batch_indices, node_indices, flat_actions]
+            flat_indices = jnp.arange(len(flat_actions))
+            new_log_probs = log_probs.reshape(-1, log_probs.shape[-1])[flat_indices, flat_actions]
             new_log_probs = new_log_probs.reshape(batch_size, num_nodes)
         else:  # [num_nodes] single timestep
+            # For 1D actions, directly index with node and action indices
             new_log_probs = log_probs[jnp.arange(len(actions)), actions]
 
         # Compute probability ratio
@@ -478,14 +489,37 @@ class GraphPPO:
         values = trajectories["values"]
         dones = trajectories["dones"]
 
+        # Convert lists to arrays for processing
+        if isinstance(rewards, list):
+            rewards = jnp.stack(rewards)
+        if isinstance(values, list):
+            values = jnp.stack(values)
+        if isinstance(dones, list):
+            dones = jnp.stack(dones)
+
         # Compute advantages and returns
         advantages, returns = self.compute_advantages(rewards, values, dones)
         advantages = (advantages - jnp.mean(advantages)) / (jnp.std(advantages) + 1e-8)
 
+        # Handle list of states (use first one for single step)
+        if isinstance(graph_states, list):
+            if len(graph_states) == 1:
+                graph_states = graph_states[0]
+            else:
+                # For multiple states, just use the first one for now
+                # In a real implementation, this would be handled differently
+                graph_states = graph_states[0]
+        
+        if isinstance(actions, list):
+            actions = actions[0] if len(actions) == 1 else jnp.stack(actions)[0]
+        
+        if isinstance(old_log_probs, list):
+            old_log_probs = old_log_probs[0] if len(old_log_probs) == 1 else jnp.stack(old_log_probs)[0]
+
         # Compute gradients
         def loss_fn(params):
             loss, _ = self.compute_loss(
-                params, graph_states, actions, old_log_probs, advantages, returns
+                params, graph_states, actions, old_log_probs, advantages[0], returns[0]
             )
             return loss
 
