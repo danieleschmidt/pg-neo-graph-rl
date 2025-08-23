@@ -33,20 +33,20 @@
       "architecture_results": {
         "gcn": {
           "performance": -1.7229306936264037,
-          "convergence_rate": 0.899172514357058,
-          "memory_efficiency": 0.7649772629198404,
+          "convergence_rate": 0.963069214848424,
+          "memory_efficiency": 0.8419082246889998,
           "scalability": false
         },
         "transformer": {
           "performance": -1.672930693626404,
-          "convergence_rate": 0.804055109630056,
-          "memory_efficiency": 0.8540735451936702,
+          "convergence_rate": 0.8838330667060063,
+          "memory_efficiency": 0.9135507305542723,
           "scalability": false
         },
         "gat": {
           "performance": -1.7029306936264037,
-          "convergence_rate": 0.8657653728884157,
-          "memory_efficiency": 0.9374877059682004,
+          "convergence_rate": 0.8425671612584551,
+          "memory_efficiency": 0.9776496693674224,
           "scalability": false
         }
       },
@@ -64,35 +64,35 @@
         {
           "size": 4,
           "performance": -19.19999885559082,
-          "execution_time": 0.09241032600402832,
+          "execution_time": 0.09016704559326172,
           "scaling_factor": 1.0,
-          "throughput": 43.285206025846435
+          "throughput": 44.362105619427375
         },
         {
           "size": 9,
           "performance": -19.19999885559082,
-          "execution_time": 0.061214447021484375,
-          "scaling_factor": 0.6624199877708031,
-          "throughput": 147.02411665731913
+          "execution_time": 0.061777591705322266,
+          "scaling_factor": 0.6851460120363417,
+          "throughput": 145.68389203207855
         },
         {
           "size": 16,
           "performance": -19.19999885559082,
-          "execution_time": 0.8956894874572754,
-          "scaling_factor": 9.69252599994324,
-          "throughput": 17.863333469974666
+          "execution_time": 0.8904309272766113,
+          "scaling_factor": 9.875347710662421,
+          "throughput": 17.96882779996883
         },
         {
           "size": 25,
           "performance": -19.200010299682617,
-          "execution_time": 0.935260534286499,
-          "scaling_factor": 10.12073622860858,
-          "throughput": 26.730519554182035
+          "execution_time": 0.9351415634155273,
+          "scaling_factor": 10.371212201339016,
+          "throughput": 26.733920272658573
         }
       ],
       "linear_scaling": false,
       "max_size_tested": 25,
-      "throughput_efficiency": 0.6175440065647538,
+      "throughput_efficiency": 0.6026296520278573,
       "optimization_features": [
         "Adaptive caching",
         "Load balancing",
@@ -168,20 +168,20 @@
         "architecture_results": {
           "gcn": {
             "performance": -1.7229306936264037,
-            "convergence_rate": 0.899172514357058,
-            "memory_efficiency": 0.7649772629198404,
+            "convergence_rate": 0.963069214848424,
+            "memory_efficiency": 0.8419082246889998,
             "scalability": false
           },
           "transformer": {
             "performance": -1.672930693626404,
-            "convergence_rate": 0.804055109630056,
-            "memory_efficiency": 0.8540735451936702,
+            "convergence_rate": 0.8838330667060063,
+            "memory_efficiency": 0.9135507305542723,
             "scalability": false
           },
           "gat": {
             "performance": -1.7029306936264037,
-            "convergence_rate": 0.8657653728884157,
-            "memory_efficiency": 0.9374877059682004,
+            "convergence_rate": 0.8425671612584551,
+            "memory_efficiency": 0.9776496693674224,
             "scalability": false
           }
         },
@@ -199,35 +199,35 @@
           {
             "size": 4,
             "performance": -19.19999885559082,
-            "execution_time": 0.09241032600402832,
+            "execution_time": 0.09016704559326172,
             "scaling_factor": 1.0,
-            "throughput": 43.285206025846435
+            "throughput": 44.362105619427375
           },
           {
             "size": 9,
             "performance": -19.19999885559082,
-            "execution_time": 0.061214447021484375,
-            "scaling_factor": 0.6624199877708031,
-            "throughput": 147.02411665731913
+            "execution_time": 0.061777591705322266,
+            "scaling_factor": 0.6851460120363417,
+            "throughput": 145.68389203207855
           },
           {
             "size": 16,
             "performance": -19.19999885559082,
-            "execution_time": 0.8956894874572754,
-            "scaling_factor": 9.69252599994324,
-            "throughput": 17.863333469974666
+            "execution_time": 0.8904309272766113,
+            "scaling_factor": 9.875347710662421,
+            "throughput": 17.96882779996883
           },
           {
             "size": 25,
             "performance": -19.200010299682617,
-            "execution_time": 0.935260534286499,
-            "scaling_factor": 10.12073622860858,
-            "throughput": 26.730519554182035
+            "execution_time": 0.9351415634155273,
+            "scaling_factor": 10.371212201339016,
+            "throughput": 26.733920272658573
           }
         ],
         "linear_scaling": false,
         "max_size_tested": 25,
-        "throughput_efficiency": 0.6175440065647538,
+        "throughput_efficiency": 0.6026296520278573,
         "optimization_features": [
           "Adaptive caching",
           "Load balancing",
@@ -273,5 +273,5 @@
       "scalability_demonstrated": false
     }
   },
-  "timestamp": 1755843784.073969
+  "timestamp": 1755974141.191305
 }
