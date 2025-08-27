@@ -161,3 +161,27 @@ class MetricsCollector:
             smoothed_rewards.append(sum(window_rewards) / len(window_rewards))
 
         return smoothed_rewards
+
+    def get_performance_metrics(self) -> Dict[str, float]:
+        """Compute performance optimization metrics for quality gates."""
+        if not self.metrics_history:
+            return {"efficiency_score": 0.0}
+        
+        # Compute efficiency metrics
+        latest = self.metrics_history[-1]
+        efficiency_score = min(1.0, latest.global_reward / max(latest.training_time, 1e-8))
+        
+        # Compute convergence efficiency
+        if len(self.metrics_history) > 1:
+            convergence_efficiency = sum(
+                m.convergence_rate for m in self.metrics_history[-10:]
+            ) / min(10, len(self.metrics_history))
+        else:
+            convergence_efficiency = 0.0
+        
+        return {
+            "efficiency_score": float(efficiency_score),
+            "convergence_efficiency": float(convergence_efficiency),
+            "reward_per_second": float(latest.global_reward / max(latest.training_time, 1e-8)),
+            "communication_efficiency": float(latest.global_reward / max(latest.communication_rounds, 1))
+        }

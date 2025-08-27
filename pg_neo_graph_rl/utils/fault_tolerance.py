@@ -337,3 +337,74 @@ robust_retry = retry_with_backoff(RetryConfig(
     max_delay=30.0,
     backoff_factor=1.5
 ))
+
+
+class DistributedFaultTolerance:
+    """
+    Enhanced fault tolerance for distributed federated learning systems.
+    """
+    
+    def __init__(self, num_agents: int, min_healthy_agents: int = None):
+        self.num_agents = num_agents
+        self.min_healthy_agents = min_healthy_agents or max(1, num_agents // 2)
+        self.agent_health = {i: True for i in range(num_agents)}
+        self.checkpoint_manager = CheckpointManager()
+        
+    def mark_agent_failed(self, agent_id: int):
+        """Mark an agent as failed."""
+        self.agent_health[agent_id] = False
+        healthy_count = sum(self.agent_health.values())
+        
+        if healthy_count < self.min_healthy_agents:
+            logger.critical(
+                f"Critical failure: Only {healthy_count}/{self.num_agents} agents healthy. "
+                f"Minimum required: {self.min_healthy_agents}"
+            )
+            self._trigger_emergency_recovery()
+    
+    def mark_agent_recovered(self, agent_id: int):
+        """Mark an agent as recovered."""
+        self.agent_health[agent_id] = True
+        logger.info(f"Agent {agent_id} recovered")
+    
+    def get_healthy_agents(self) -> List[int]:
+        """Get list of healthy agent IDs."""
+        return [agent_id for agent_id, healthy in self.agent_health.items() if healthy]
+    
+    def _trigger_emergency_recovery(self):
+        """Trigger emergency recovery procedures."""
+        logger.warning("Initiating emergency recovery procedures")
+        # Load latest checkpoint
+        self.checkpoint_manager.load_emergency_checkpoint()
+
+
+class CheckpointManager:
+    """
+    Manages model checkpointing for fault recovery.
+    """
+    
+    def __init__(self, checkpoint_interval: int = 100):
+        self.checkpoint_interval = checkpoint_interval
+        self.episode_count = 0
+        self.latest_checkpoint = None
+        
+    def should_checkpoint(self, episode: int) -> bool:
+        """Determine if checkpoint should be created."""
+        return episode % self.checkpoint_interval == 0
+        
+    def save_checkpoint(self, model_state: Dict[str, Any], episode: int):
+        """Save model checkpoint."""
+        checkpoint = {
+            "episode": episode,
+            "model_state": model_state,
+            "timestamp": time.time()
+        }
+        self.latest_checkpoint = checkpoint
+        logger.info(f"Checkpoint saved at episode {episode}")
+        
+    def load_emergency_checkpoint(self) -> Optional[Dict[str, Any]]:
+        """Load latest checkpoint for emergency recovery."""
+        if self.latest_checkpoint:
+            logger.info(f"Loading emergency checkpoint from episode {self.latest_checkpoint['episode']}")
+            return self.latest_checkpoint
+        return None
